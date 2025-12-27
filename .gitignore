@@ -1,0 +1,63 @@
+# ============================================
+# SMART HOME AI CENTER - Git Ignore
+# ============================================
+
+# Environment files (NEVER commit secrets!)
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Data & Cache
+data/
+cache/
+*.cache
+.cache/
+
+# Docker volumes (local dev)
+influxdb-data/
+influxdb-config/
+
+# Exports (generated files)
+exports/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/secrets.toml

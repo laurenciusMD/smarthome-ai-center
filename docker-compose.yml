@@ -1,0 +1,88 @@
+version: "3.8"
+
+services:
+  # ============================================
+  # SMART HOME AI CENTER - Main Application
+  # ============================================
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: smarthome-ai-center
+    restart: unless-stopped
+    ports:
+      - "8501:8501"  # Streamlit default port
+    environment:
+      # Home Assistant Connection
+      - HA_URL=${HA_URL}
+      - HA_TOKEN=${HA_TOKEN}
+      # Anthropic AI
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # InfluxDB Connection (internal network)
+      - INFLUX_URL=http://influxdb:8086
+      - INFLUX_TOKEN=${INFLUX_TOKEN}
+      - INFLUX_ORG=${INFLUX_ORG:-smarthome}
+      - INFLUX_BUCKET=${INFLUX_BUCKET:-homeassistant}
+      # App Settings
+      - TZ=${TZ:-Europe/Berlin}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      # Persist generated files (downloads, exports)
+      - ./data/exports:/app/exports
+      # Optional: Mount for development (comment out in production)
+      # - ./app:/app
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    networks:
+      - smarthome-ai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================
+  # INFLUXDB v2 - Time Series Database
+  # ============================================
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: smarthome-ai-influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"  # Expose for external access/debugging
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUX_ADMIN_USER:-admin}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUX_ADMIN_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUX_ORG:-smarthome}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUX_BUCKET:-homeassistant}
+      - DOCKER_INFLUXDB_INIT_RETENTION=${INFLUX_RETENTION:-7d}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUX_TOKEN}
+      - TZ=${TZ:-Europe/Berlin}
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+      - influxdb-config:/etc/influxdb2
+    networks:
+      - smarthome-ai-network
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# ============================================
+# NETWORKS & VOLUMES
+# ============================================
+networks:
+  smarthome-ai-network:
+    driver: bridge
+    name: smarthome-ai-network
+
+volumes:
+  influxdb-data:
+    name: smarthome-ai-influxdb-data
+  influxdb-config:
+    name: smarthome-ai-influxdb-config
