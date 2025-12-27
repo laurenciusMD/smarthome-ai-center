@@ -336,6 +336,42 @@ st.markdown("""
         border: none !important;
     }
     
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background: transparent;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background: white !important;
+        border-radius: 10px !important;
+        color: #1a2744 !important;
+        padding: 10px 20px !important;
+        border: 1px solid #e8ecf0 !important;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background: #f0f4f8 !important;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: #4dabf7 !important;
+        color: white !important;
+        border-color: #4dabf7 !important;
+    }
+    
+    .stTabs [data-baseweb="tab-panel"] {
+        padding-top: 16px;
+    }
+    
+    /* Tab content text */
+    .stTabs [data-baseweb="tab-panel"] p,
+    .stTabs [data-baseweb="tab-panel"] span,
+    .stTabs [data-baseweb="tab-panel"] div,
+    .stTabs [data-baseweb="tab-panel"] label {
+        color: #1a2744 !important;
+    }
+    
     /* Divider */
     hr {
         border: none;
@@ -623,12 +659,18 @@ def get_ha_logbook(entity_id: str = None, hours: int = 24):
     return []
 
 def get_climate_entities():
-    """Get all climate/heating related entities."""
+    """Get all climate/heating related entities including EMS-ESP."""
     states = get_ha_states()
     climate_entities = []
+    keywords = [
+        'climate.', 'sensor.temp', 'sensor.hum', 'valve', 'thermostat', 
+        'heating', 'heiz', 'ems-esp', 'ems_esp', 'boiler', 'dhw', 
+        'vorlauf', 'rücklauf', 'flow', 'radiator', 'hc1', 'hc2'
+    ]
     for entity in states:
-        eid = entity.get('entity_id', '')
-        if any(x in eid for x in ['climate.', 'sensor.temp', 'sensor.hum', 'valve', 'thermostat', 'heating', 'heiz']):
+        eid = entity.get('entity_id', '').lower()
+        fname = entity.get('attributes', {}).get('friendly_name', '').lower()
+        if any(x in eid or x in fname for x in keywords):
             climate_entities.append(entity)
     return climate_entities
 
@@ -971,12 +1013,13 @@ elif page == "🌡️ Heizung":
         
         climate_entities = get_climate_entities()
         automations = get_ha_automations()
-        heating_automations = [a for a in automations if any(x in a['name'].lower() for x in ['heiz', 'heating', 'temperatur', 'klima', 'thermostat'])]
+        heating_keywords = ['heiz', 'heating', 'temperatur', 'klima', 'thermostat', 'ems', 'vorlauf', 'boiler', 'schimmel']
+        heating_automations = [a for a in automations if any(x in a['name'].lower() for x in heating_keywords)]
         
         col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown(f"""<div class="content-card"><h3>🌡️ {len(climate_entities)} Klima-Entitäten</h3>""", unsafe_allow_html=True)
+            st.markdown(f"""<div class="content-card"><h3>🌡️ {len(climate_entities)} Klima/EMS-ESP Entitäten</h3>""", unsafe_allow_html=True)
             
             for entity in climate_entities[:10]:
                 eid = entity.get('entity_id', '')
@@ -1048,13 +1091,15 @@ elif page == "🌡️ Heizung":
             
             if include_automations:
                 automations = get_ha_automations()
-                heating_autos = [a for a in automations if any(x in a['name'].lower() for x in ['heiz', 'heating', 'temperatur', 'klima', 'thermostat'])]
+                heating_keywords = ['heiz', 'heating', 'temperatur', 'klima', 'thermostat', 'ems', 'vorlauf', 'boiler', 'schimmel']
+                heating_autos = [a for a in automations if any(x in a['name'].lower() for x in heating_keywords)]
                 context_parts.append("## HEIZUNGS-AUTOMATIONEN\n" + json.dumps(heating_autos, indent=2))
             
             if include_logs:
-                # Get logs for climate entities
+                # Get logs for climate entities including EMS-ESP
                 logs = get_ha_logbook(hours=log_hours)
-                heating_logs = [l for l in logs if any(x in str(l).lower() for x in ['climate', 'heiz', 'heating', 'temperatur', 'valve', 'thermostat'])][:50]
+                log_keywords = ['climate', 'heiz', 'heating', 'temperatur', 'valve', 'thermostat', 'ems', 'boiler', 'vorlauf', 'dhw']
+                heating_logs = [l for l in logs if any(x in str(l).lower() for x in log_keywords)][:50]
                 context_parts.append(f"## LOGBOOK (letzte {log_hours}h)\n" + json.dumps(heating_logs, indent=2))
             
             st.session_state.heating_context = "\n\n".join(context_parts)
@@ -1126,11 +1171,12 @@ Antworte auf Deutsch. Sei konkret und gib wenn möglich:
         
         if st.button("🔄 Logs laden"):
             logs = get_ha_logbook(hours=log_hours)
-            heating_logs = [l for l in logs if any(x in str(l).lower() for x in ['climate', 'heiz', 'heating', 'temperatur', 'valve', 'thermostat'])]
+            log_keywords = ['climate', 'heiz', 'heating', 'temperatur', 'valve', 'thermostat', 'ems', 'boiler', 'vorlauf', 'dhw']
+            heating_logs = [l for l in logs if any(x in str(l).lower() for x in log_keywords)]
             
-            st.markdown(f"**{len(heating_logs)} Heizungs-Ereignisse gefunden**")
+            st.markdown(f"**{len(heating_logs)} Heizungs/EMS-ESP Ereignisse gefunden**")
             
-            for log in heating_logs[:30]:
+            for log in heating_logs[:50]:
                 name = log.get('name', 'Unknown')
                 message = log.get('message', log.get('state', ''))
                 when = log.get('when', '')
