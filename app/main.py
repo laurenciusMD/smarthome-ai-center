@@ -292,44 +292,55 @@ st.markdown("""
         border-radius: 4px !important;
     }
     
-    /* Code blocks - ensure text is visible */
+    /* Code blocks - light background, dark text for readability */
     .stMarkdown pre {
-        background: #1e293b !important;
+        background: #f1f5f9 !important;
         border-radius: 8px !important;
         padding: 16px !important;
+        border: 1px solid #e2e8f0 !important;
     }
     
     .stMarkdown pre code {
         background: transparent !important;
-        color: #e2e8f0 !important;
+        color: #334155 !important;
         font-size: 14px !important;
     }
     
     /* st.code blocks */
     .stCodeBlock, 
     [data-testid="stCodeBlock"] {
-        background: #1e293b !important;
+        background: #f1f5f9 !important;
         border-radius: 8px !important;
+        border: 1px solid #e2e8f0 !important;
     }
     
     .stCodeBlock code,
     [data-testid="stCodeBlock"] code,
     .stCodeBlock pre,
     [data-testid="stCodeBlock"] pre {
-        background: #1e293b !important;
-        color: #e2e8f0 !important;
+        background: #f1f5f9 !important;
+        color: #334155 !important;
     }
     
     /* All code elements */
     pre, code {
-        color: #e2e8f0 !important;
+        color: #334155 !important;
     }
     
     pre {
-        background: #1e293b !important;
+        background: #f1f5f9 !important;
         padding: 16px !important;
         border-radius: 8px !important;
         overflow-x: auto !important;
+        border: 1px solid #e2e8f0 !important;
+    }
+    
+    /* Inline code */
+    p code, li code, span code {
+        background: #f1f5f9 !important;
+        color: #334155 !important;
+        padding: 2px 6px !important;
+        border-radius: 4px !important;
     }
     
     /* Alerts */
@@ -717,6 +728,87 @@ def call_ha_service(domain: str, service: str, data: dict):
         return resp.status_code == 200, resp.text
     except Exception as e:
         return False, str(e)
+
+def parse_service_calls(text: str):
+    """Parse service calls from AI response text."""
+    import re
+    import yaml
+    
+    service_calls = []
+    
+    # Pattern 1: YAML blocks with service:
+    yaml_pattern = r'```(?:yaml)?\s*(service:\s*[\w\.]+.*?)```'
+    matches = re.findall(yaml_pattern, text, re.DOTALL | re.IGNORECASE)
+    
+    for match in matches:
+        try:
+            parsed = yaml.safe_load(match)
+            if isinstance(parsed, dict) and 'service' in parsed:
+                service_calls.append(parsed)
+        except:
+            pass
+    
+    # Pattern 2: Look for service: domain.action patterns
+    service_pattern = r'service:\s*([\w]+)\.([\w]+)'
+    for match in re.finditer(service_pattern, text):
+        domain, action = match.groups()
+        # Try to find associated data
+        # This is a simplified parser
+        
+    return service_calls
+
+def render_response_with_actions(response_text: str, key_prefix: str = "action"):
+    """Render AI response with executable service call buttons."""
+    import re
+    import yaml
+    
+    # Split response into parts
+    parts = re.split(r'(```(?:yaml)?\s*service:.*?```)', response_text, flags=re.DOTALL)
+    
+    for i, part in enumerate(parts):
+        if part.strip().startswith('```') and 'service:' in part.lower():
+            # This is a service call block
+            yaml_content = re.sub(r'^```(?:yaml)?\s*', '', part)
+            yaml_content = re.sub(r'\s*```$', '', yaml_content)
+            
+            # Display the code
+            st.code(yaml_content, language='yaml')
+            
+            # Try to parse and add execute button
+            try:
+                parsed = yaml.safe_load(yaml_content)
+                if isinstance(parsed, dict) and 'service' in parsed:
+                    service_full = parsed.get('service', '')
+                    if '.' in service_full:
+                        domain, service = service_full.split('.', 1)
+                        
+                        # Build service data
+                        service_data = {}
+                        if 'target' in parsed:
+                            service_data['target'] = parsed['target']
+                        if 'data' in parsed:
+                            service_data.update(parsed['data'])
+                        if 'entity_id' in parsed:
+                            service_data['entity_id'] = parsed['entity_id']
+                        
+                        # Create execute button
+                        col1, col2 = st.columns([1, 4])
+                        with col1:
+                            if st.button(f"▶️ Ausführen", key=f"{key_prefix}_{i}"):
+                                with st.spinner(f"Führe {service_full} aus..."):
+                                    success, result = call_ha_service(domain, service, service_data)
+                                if success:
+                                    st.success(f"✅ {service_full} erfolgreich ausgeführt!")
+                                else:
+                                    st.error(f"❌ Fehler: {result}")
+                        with col2:
+                            st.caption(f"Service: `{service_full}`")
+            except Exception as e:
+                st.caption(f"⚠️ Konnte Service nicht parsen: {e}")
+        else:
+            # Regular markdown content
+            if part.strip():
+                st.markdown(part)
 
 # ============================================
 # SIDEBAR
@@ -1144,12 +1236,13 @@ elif page == "🌡️ Heizung":
         # Chat interface
         st.markdown("### Chat")
         
-        # Display chat history
-        for msg in st.session_state.heating_chat_history:
+        # Display chat history with executable actions
+        for idx, msg in enumerate(st.session_state.heating_chat_history):
             if msg['role'] == 'user':
                 st.markdown(f"**🧑 Du:** {msg['content']}")
             else:
-                st.markdown(f"**🤖 Claude:** {msg['content']}")
+                st.markdown("**🤖 Claude:**")
+                render_response_with_actions(msg['content'], key_prefix=f"heat_chat_{idx}")
             st.markdown("---")
         
         # Input
@@ -1179,8 +1272,18 @@ Der Benutzer hat ein Problem mit seiner Heizung. Analysiere die bereitgestellten
 Antworte auf Deutsch. Sei konkret und gib wenn möglich:
 1. Analyse des Problems basierend auf den Logs/Daten
 2. Mögliche Ursachen
-3. Konkrete Lösungsvorschläge (mit YAML-Code wenn relevant)
-4. Nächste Schritte zur Diagnose"""
+3. Konkrete Lösungsvorschläge
+
+Wenn du einen Home Assistant Dienstaufruf empfiehlst, formatiere ihn IMMER so (im YAML Code-Block):
+```yaml
+service: domain.service_name
+target:
+  entity_id: entity.id
+data:
+  parameter: wert
+```
+
+Der Benutzer kann diese Dienstaufrufe dann direkt aus der Oberfläche ausführen."""
 
             # Add user message to history
             st.session_state.heating_chat_history.append({'role': 'user', 'content': user_input})
