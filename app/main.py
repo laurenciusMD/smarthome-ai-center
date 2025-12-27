@@ -478,7 +478,14 @@ def git_pull_updates():
                 return result.returncode == 0, result.stdout + result.stderr
             except Exception as e:
                 return False, str(e)
-    return False, "Manuelles Update nötig:\ncd /DATA/AppData/smarthome-ai-center && git pull && docker compose up -d --build"
+    return False, """Git nicht im Container verfügbar.
+
+**Manuelles Update auf dem Server:**
+```
+cd /DATA/AppData/smarthome-ai-center
+git pull
+sudo docker compose up -d --build
+```"""
 
 def get_git_status():
     """Get current git status."""
@@ -807,10 +814,11 @@ elif page == "⚙️ Einstellungen":
             with st.spinner("Lade..."):
                 success, output = git_pull_updates()
             if success:
-                st.success("✅ Updates geladen!")
-            else:
-                st.error("Manuell updaten")
+                st.success("✅ Updates geladen! App neu starten.")
                 st.code(output)
+            else:
+                st.warning("⚠️ Auto-Update nicht möglich")
+                st.markdown(output)
     
     st.markdown("</div>", unsafe_allow_html=True)
     
