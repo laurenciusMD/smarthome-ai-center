@@ -455,31 +455,47 @@ def ask_claude(prompt: str) -> str:
 
 def git_pull_updates():
     """Pull latest updates from GitHub."""
-    try:
-        result = subprocess.run(
-            ["git", "pull", "origin", "main"],
-            cwd="/app",
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
-        return result.returncode == 0, result.stdout + result.stderr
-    except Exception as e:
-        return False, str(e)
+    # Try multiple possible locations
+    git_dirs = ["/app", "/data", os.getcwd()]
+    
+    for git_dir in git_dirs:
+        git_path = os.path.join(git_dir, ".git")
+        if os.path.exists(git_path):
+            try:
+                result = subprocess.run(
+                    ["git", "pull", "origin", "main"],
+                    cwd=git_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+                return result.returncode == 0, result.stdout + result.stderr
+            except Exception as e:
+                return False, str(e)
+    
+    return False, "Kein Git Repository gefunden. Updates müssen manuell auf dem Host ausgeführt werden:\n\ncd /DATA/AppData/smarthome-ai-center\ngit pull\ndocker compose up -d --build"
 
 def get_git_status():
     """Get current git status."""
-    try:
-        result = subprocess.run(
-            ["git", "log", "-1", "--format=%h - %s (%cr)"],
-            cwd="/app",
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        return result.stdout.strip() if result.returncode == 0 else "Unbekannt"
-    except:
-        return "Git nicht verfügbar"
+    git_dirs = ["/app", "/data", os.getcwd()]
+    
+    for git_dir in git_dirs:
+        git_path = os.path.join(git_dir, ".git")
+        if os.path.exists(git_path):
+            try:
+                result = subprocess.run(
+                    ["git", "log", "-1", "--format=%h - %s (%cr)"],
+                    cwd=git_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    return result.stdout.strip()
+            except:
+                pass
+    
+    return "v" + APP_VERSION + " (lokale Installation)"
 
 # ============================================
 # SIDEBAR
@@ -836,7 +852,10 @@ elif page == "⚙️ Einstellungen":
         }
         save_settings(new_settings)
         st.session_state.settings = new_settings
-        st.success("✅ Einstellungen gespeichert!")
+        st.balloons()
+        st.success("✅ Einstellungen erfolgreich gespeichert!")
+        import time
+        time.sleep(1)
         st.rerun()
     
     st.markdown("---")
