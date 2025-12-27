@@ -24,6 +24,8 @@ services:
       # App Settings
       - TZ=${TZ:-Europe/Berlin}
     volumes:
+      # Mount entire repo for git updates from UI
+      - .:/repo:rw
       # Persist app configuration (API keys, settings)
       - ./config:/config
       # Persist generated files (downloads, exports)

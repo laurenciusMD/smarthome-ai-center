@@ -490,7 +490,8 @@ def ask_claude(prompt: str) -> str:
 
 def git_pull_updates():
     """Pull latest updates from GitHub."""
-    git_dirs = ["/app", "/data", os.getcwd()]
+    # /repo is mounted from host in docker-compose
+    git_dirs = ["/repo", "/app", "/data", os.getcwd()]
     for git_dir in git_dirs:
         git_path = os.path.join(git_dir, ".git")
         if os.path.exists(git_path):
@@ -502,10 +503,13 @@ def git_pull_updates():
                     text=True,
                     timeout=60
                 )
-                return result.returncode == 0, result.stdout + result.stderr
+                if result.returncode == 0:
+                    return True, f"✅ Update erfolgreich!\n\n{result.stdout}\n\n⚠️ **Neustart erforderlich:**\n```\nsudo docker compose up -d --build\n```"
+                else:
+                    return False, result.stderr
             except Exception as e:
                 return False, str(e)
-    return False, """Git nicht im Container verfügbar.
+    return False, """Git Repository nicht gefunden.
 
 **Manuelles Update auf dem Server:**
 ```
@@ -516,7 +520,7 @@ sudo docker compose up -d --build
 
 def get_git_status():
     """Get current git status."""
-    git_dirs = ["/app", "/data", os.getcwd()]
+    git_dirs = ["/repo", "/app", "/data", os.getcwd()]
     for git_dir in git_dirs:
         git_path = os.path.join(git_dir, ".git")
         if os.path.exists(git_path):
