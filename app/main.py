@@ -551,6 +551,102 @@ def get_git_status():
                 pass
     return f"v{APP_VERSION}"
 
+def get_ha_automations():
+    """Get all automations from Home Assistant."""
+    url = get_setting("ha_url", "").rstrip("/")
+    token = get_setting("ha_token", "")
+    automations = []
+    try:
+        # Get automation states
+        resp = requests.get(
+            f"{url}/api/states",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=30
+        )
+        if resp.status_code == 200:
+            states = resp.json()
+            for entity in states:
+                if entity.get('entity_id', '').startswith('automation.'):
+                    automations.append({
+                        'entity_id': entity.get('entity_id'),
+                        'name': entity.get('attributes', {}).get('friendly_name', entity.get('entity_id')),
+                        'state': entity.get('state'),
+                        'last_triggered': entity.get('attributes', {}).get('last_triggered'),
+                        'mode': entity.get('attributes', {}).get('mode', 'single'),
+                        'current': entity.get('attributes', {}).get('current', 0)
+                    })
+    except:
+        pass
+    return automations
+
+def get_automation_config(entity_id: str):
+    """Get automation configuration/YAML from Home Assistant."""
+    url = get_setting("ha_url", "").rstrip("/")
+    token = get_setting("ha_token", "")
+    try:
+        # Try to get config via API
+        resp = requests.get(
+            f"{url}/api/config/automation/config/{entity_id.replace('automation.', '')}",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=30
+        )
+        if resp.status_code == 200:
+            return resp.json()
+    except:
+        pass
+    return None
+
+def get_ha_logbook(entity_id: str = None, hours: int = 24):
+    """Get logbook entries from Home Assistant."""
+    url = get_setting("ha_url", "").rstrip("/")
+    token = get_setting("ha_token", "")
+    try:
+        end_time = datetime.now()
+        start_time = end_time - timedelta(hours=hours)
+        
+        params = {
+            "timestamp": start_time.isoformat()
+        }
+        if entity_id:
+            params["entity"] = entity_id
+            
+        resp = requests.get(
+            f"{url}/api/logbook/{start_time.isoformat()}",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"entity": entity_id} if entity_id else {},
+            timeout=30
+        )
+        if resp.status_code == 200:
+            return resp.json()
+    except:
+        pass
+    return []
+
+def get_climate_entities():
+    """Get all climate/heating related entities."""
+    states = get_ha_states()
+    climate_entities = []
+    for entity in states:
+        eid = entity.get('entity_id', '')
+        if any(x in eid for x in ['climate.', 'sensor.temp', 'sensor.hum', 'valve', 'thermostat', 'heating', 'heiz']):
+            climate_entities.append(entity)
+    return climate_entities
+
+def call_ha_service(domain: str, service: str, data: dict):
+    """Call a Home Assistant service."""
+    url = get_setting("ha_url", "").rstrip("/")
+    token = get_setting("ha_token", "")
+    try:
+        resp = requests.post(
+            f"{url}/api/services/{domain}/{service}",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json=data,
+            timeout=30
+        )
+        return resp.status_code == 200, resp.text
+    except Exception as e:
+        return False, str(e)
+
 # ============================================
 # SIDEBAR
 # ============================================
@@ -569,7 +665,7 @@ with st.sidebar:
     # Navigation
     page = st.radio(
         "",
-        ["🏠 Dashboard", "🔍 Bug-Hunter", "📊 Analyst", "🛠️ Architect", "⚙️ Einstellungen"],
+        ["🏠 Dashboard", "🔍 Bug-Hunter", "🔧 Optimizer", "🌡️ Heizung", "📊 Analyst", "🛠️ Architect", "⚙️ Einstellungen"],
         label_visibility="collapsed"
     )
 
@@ -732,6 +828,321 @@ Antworte auf Deutsch:
     
     if errors:
         st.markdown("</div>", unsafe_allow_html=True)
+
+# ============================================
+# PAGE: AUTOMATION OPTIMIZER
+# ============================================
+elif page == "🔧 Optimizer":
+    st.markdown("## Automation Optimizer")
+    st.markdown("Analysiere und optimiere bestehende Automationen")
+    
+    # Session state for optimizer
+    if 'optimizer_analysis' not in st.session_state:
+        st.session_state.optimizer_analysis = {}
+    if 'optimizer_claude_prompt' not in st.session_state:
+        st.session_state.optimizer_claude_prompt = {}
+    
+    # Load automations
+    automations = get_ha_automations()
+    
+    st.markdown(f"""<div class="content-card"><h3>⚡ {len(automations)} Automationen gefunden</h3></div>""", unsafe_allow_html=True)
+    
+    if not automations:
+        st.warning("Keine Automationen gefunden. Prüfe die Home Assistant Verbindung.")
+    else:
+        for i, auto in enumerate(automations):
+            auto_id = auto['entity_id']
+            auto_name = auto['name']
+            
+            with st.expander(f"{'🟢' if auto['state'] == 'on' else '🔴'} {auto_name}", expanded=False):
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    st.markdown(f"**Entity:** `{auto_id}`")
+                    st.markdown(f"**Status:** {auto['state']} | **Modus:** {auto['mode']}")
+                    if auto['last_triggered']:
+                        st.markdown(f"**Zuletzt ausgelöst:** {auto['last_triggered']}")
+                
+                with col2:
+                    # Get config if available
+                    config = get_automation_config(auto_id)
+                    if config:
+                        st.json(config)
+                
+                st.markdown("---")
+                
+                # Step 1: Gemini Analysis
+                if st.button(f"🔍 Mit Gemini analysieren", key=f"opt_gemini_{i}"):
+                    with st.spinner("Gemini analysiert..."):
+                        config_str = json.dumps(config, indent=2) if config else "Konfiguration nicht verfügbar"
+                        
+                        prompt = f"""Analysiere diese Home Assistant Automation und gib Verbesserungsvorschläge:
+
+AUTOMATION: {auto_name}
+ENTITY: {auto_id}
+STATUS: {auto['state']}
+MODUS: {auto['mode']}
+ZULETZT AUSGELÖST: {auto['last_triggered']}
+
+KONFIGURATION:
+{config_str}
+
+Antworte auf Deutsch mit:
+1. Was macht diese Automation?
+2. Mögliche Probleme oder Ineffizienzen
+3. 3-5 konkrete Verbesserungsvorschläge
+4. Bewertung (1-10) der aktuellen Qualität"""
+
+                        analysis = ask_gemini(prompt)
+                        st.session_state.optimizer_analysis[auto_id] = analysis
+                
+                # Show Gemini analysis
+                if auto_id in st.session_state.optimizer_analysis:
+                    st.markdown("### 🔍 Gemini Analyse")
+                    st.markdown(st.session_state.optimizer_analysis[auto_id])
+                    
+                    st.markdown("---")
+                    
+                    # Step 2: Prepare Claude prompt
+                    if st.button(f"📝 Claude Prompt erstellen", key=f"opt_prep_{i}"):
+                        config_str = json.dumps(config, indent=2) if config else "Nicht verfügbar"
+                        
+                        claude_prompt = f"""Optimiere diese Home Assistant Automation basierend auf der Analyse:
+
+AKTUELLE AUTOMATION:
+Name: {auto_name}
+Entity: {auto_id}
+
+AKTUELLE KONFIGURATION:
+```yaml
+{config_str}
+```
+
+GEMINI ANALYSE:
+{st.session_state.optimizer_analysis[auto_id]}
+
+AUFGABE:
+1. Erstelle eine verbesserte Version der Automation
+2. Erkläre die Änderungen
+3. Gib den vollständigen YAML-Code aus, der direkt in Home Assistant verwendet werden kann
+
+Antworte auf Deutsch."""
+
+                        st.session_state.optimizer_claude_prompt[auto_id] = claude_prompt
+                
+                # Show and edit Claude prompt
+                if auto_id in st.session_state.optimizer_claude_prompt:
+                    st.markdown("### 📝 Claude Prompt (bearbeitbar)")
+                    edited_prompt = st.text_area(
+                        "Prompt anpassen:",
+                        value=st.session_state.optimizer_claude_prompt[auto_id],
+                        height=300,
+                        key=f"prompt_edit_{i}"
+                    )
+                    
+                    if st.button(f"🚀 Mit Claude optimieren", key=f"opt_claude_{i}"):
+                        with st.spinner("Claude optimiert..."):
+                            result = ask_claude(edited_prompt)
+                        
+                        st.markdown("### 🎯 Claude Optimierung")
+                        st.markdown(result)
+                        
+                        # TODO: Parse YAML and offer to save
+                        st.info("💡 Kopiere den YAML-Code und füge ihn in deine automations.yaml ein.")
+
+# ============================================
+# PAGE: HEIZUNGSMANAGEMENT
+# ============================================
+elif page == "🌡️ Heizung":
+    st.markdown("## Heizungsmanagement")
+    st.markdown("Intelligente Analyse und Optimierung deiner Heizung")
+    
+    # Session state for heating chat
+    if 'heating_chat_history' not in st.session_state:
+        st.session_state.heating_chat_history = []
+    if 'heating_context' not in st.session_state:
+        st.session_state.heating_context = ""
+    
+    # Tabs for different sections
+    tab1, tab2, tab3 = st.tabs(["📊 Übersicht", "💬 KI-Assistent", "📋 Logs"])
+    
+    with tab1:
+        st.markdown("### Heizungs-Entitäten")
+        
+        climate_entities = get_climate_entities()
+        automations = get_ha_automations()
+        heating_automations = [a for a in automations if any(x in a['name'].lower() for x in ['heiz', 'heating', 'temperatur', 'klima', 'thermostat'])]
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown(f"""<div class="content-card"><h3>🌡️ {len(climate_entities)} Klima-Entitäten</h3>""", unsafe_allow_html=True)
+            
+            for entity in climate_entities[:10]:
+                eid = entity.get('entity_id', '')
+                state = entity.get('state', 'unknown')
+                name = entity.get('attributes', {}).get('friendly_name', eid)
+                temp = entity.get('attributes', {}).get('current_temperature', '')
+                target = entity.get('attributes', {}).get('temperature', '')
+                
+                temp_info = f" | {temp}°C → {target}°C" if temp and target else f" | {state}"
+                
+                st.markdown(f"""
+                <div class="list-item">
+                    <div class="list-icon" style="background: rgba(77, 171, 247, 0.1); color: #4dabf7;">🌡️</div>
+                    <div class="list-content">
+                        <p class="list-title">{name[:30]}</p>
+                        <p class="list-subtitle">{eid}{temp_info}</p>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""<div class="content-card"><h3>⚡ {len(heating_automations)} Heizungs-Automationen</h3>""", unsafe_allow_html=True)
+            
+            for auto in heating_automations:
+                status_icon = "🟢" if auto['state'] == 'on' else "🔴"
+                triggered = auto.get('last_triggered', 'Nie')
+                
+                st.markdown(f"""
+                <div class="list-item">
+                    <div class="list-icon" style="background: rgba(0, 196, 140, 0.1); color: #00c48c;">{status_icon}</div>
+                    <div class="list-content">
+                        <p class="list-title">{auto['name'][:30]}</p>
+                        <p class="list-subtitle">Zuletzt: {triggered}</p>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            if not heating_automations:
+                st.info("Keine Heizungs-Automationen gefunden")
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+    
+    with tab2:
+        st.markdown("### 💬 KI-Assistent für Heizungsprobleme")
+        st.markdown("Beschreibe dein Problem und ich analysiere Logs, Entitäten und Automationen.")
+        
+        # Context builder
+        with st.expander("🔧 Kontext konfigurieren", expanded=False):
+            include_entities = st.checkbox("Klima-Entitäten einbeziehen", value=True)
+            include_automations = st.checkbox("Heizungs-Automationen einbeziehen", value=True)
+            include_logs = st.checkbox("Logbook einbeziehen (letzte 24h)", value=True)
+            log_hours = st.slider("Log-Zeitraum (Stunden)", 1, 72, 24)
+        
+        # Build context
+        if st.button("🔄 Kontext aktualisieren"):
+            context_parts = []
+            
+            if include_entities:
+                climate_entities = get_climate_entities()
+                context_parts.append("## KLIMA-ENTITÄTEN\n" + json.dumps([{
+                    'entity_id': e.get('entity_id'),
+                    'state': e.get('state'),
+                    'current_temp': e.get('attributes', {}).get('current_temperature'),
+                    'target_temp': e.get('attributes', {}).get('temperature'),
+                    'hvac_action': e.get('attributes', {}).get('hvac_action')
+                } for e in climate_entities], indent=2))
+            
+            if include_automations:
+                automations = get_ha_automations()
+                heating_autos = [a for a in automations if any(x in a['name'].lower() for x in ['heiz', 'heating', 'temperatur', 'klima', 'thermostat'])]
+                context_parts.append("## HEIZUNGS-AUTOMATIONEN\n" + json.dumps(heating_autos, indent=2))
+            
+            if include_logs:
+                # Get logs for climate entities
+                logs = get_ha_logbook(hours=log_hours)
+                heating_logs = [l for l in logs if any(x in str(l).lower() for x in ['climate', 'heiz', 'heating', 'temperatur', 'valve', 'thermostat'])][:50]
+                context_parts.append(f"## LOGBOOK (letzte {log_hours}h)\n" + json.dumps(heating_logs, indent=2))
+            
+            st.session_state.heating_context = "\n\n".join(context_parts)
+            st.success(f"✅ Kontext aktualisiert ({len(st.session_state.heating_context)} Zeichen)")
+        
+        # Show context preview
+        if st.session_state.heating_context:
+            with st.expander("📋 Aktueller Kontext (Vorschau)"):
+                st.code(st.session_state.heating_context[:2000] + "..." if len(st.session_state.heating_context) > 2000 else st.session_state.heating_context)
+        
+        st.markdown("---")
+        
+        # Chat interface
+        st.markdown("### Chat")
+        
+        # Display chat history
+        for msg in st.session_state.heating_chat_history:
+            if msg['role'] == 'user':
+                st.markdown(f"**🧑 Du:** {msg['content']}")
+            else:
+                st.markdown(f"**🤖 Claude:** {msg['content']}")
+            st.markdown("---")
+        
+        # Input
+        user_input = st.text_area("Dein Problem oder deine Frage:", placeholder="z.B.: Die Heizung im Wohnzimmer schaltet sich nicht ab obwohl die Zieltemperatur erreicht ist...", height=100)
+        
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            send_button = st.button("📤 Senden", type="primary")
+        with col2:
+            if st.button("🗑️ Chat leeren"):
+                st.session_state.heating_chat_history = []
+                st.rerun()
+        
+        if send_button and user_input:
+            # Build full prompt with context
+            full_prompt = f"""Du bist ein Experte für Home Assistant Heizungssteuerung. 
+Der Benutzer hat ein Problem mit seiner Heizung. Analysiere die bereitgestellten Daten und hilf bei der Lösung.
+
+{st.session_state.heating_context}
+
+## CHAT-VERLAUF
+{chr(10).join([f"{m['role'].upper()}: {m['content']}" for m in st.session_state.heating_chat_history[-5:]])}
+
+## AKTUELLE FRAGE
+{user_input}
+
+Antworte auf Deutsch. Sei konkret und gib wenn möglich:
+1. Analyse des Problems basierend auf den Logs/Daten
+2. Mögliche Ursachen
+3. Konkrete Lösungsvorschläge (mit YAML-Code wenn relevant)
+4. Nächste Schritte zur Diagnose"""
+
+            # Add user message to history
+            st.session_state.heating_chat_history.append({'role': 'user', 'content': user_input})
+            
+            with st.spinner("Claude analysiert..."):
+                response = ask_claude(full_prompt)
+            
+            # Add response to history
+            st.session_state.heating_chat_history.append({'role': 'assistant', 'content': response})
+            
+            st.rerun()
+    
+    with tab3:
+        st.markdown("### 📋 Heizungs-Logs")
+        
+        log_hours = st.selectbox("Zeitraum", [6, 12, 24, 48, 72], index=2)
+        
+        if st.button("🔄 Logs laden"):
+            logs = get_ha_logbook(hours=log_hours)
+            heating_logs = [l for l in logs if any(x in str(l).lower() for x in ['climate', 'heiz', 'heating', 'temperatur', 'valve', 'thermostat'])]
+            
+            st.markdown(f"**{len(heating_logs)} Heizungs-Ereignisse gefunden**")
+            
+            for log in heating_logs[:30]:
+                name = log.get('name', 'Unknown')
+                message = log.get('message', log.get('state', ''))
+                when = log.get('when', '')
+                
+                st.markdown(f"""
+                <div class="list-item">
+                    <div class="list-content">
+                        <p class="list-title">{name}</p>
+                        <p class="list-subtitle">{message} - {when}</p>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
 # ============================================
 # PAGE: ANALYST
