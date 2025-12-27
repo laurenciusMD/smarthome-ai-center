@@ -267,6 +267,29 @@ st.markdown("""
         color: #1a2744 !important;
     }
     
+    /* Markdown text */
+    .stMarkdown, .stMarkdown p, .stMarkdown li, .stMarkdown span {
+        color: #1a2744 !important;
+    }
+    
+    .stMarkdown code {
+        background: #f0f4f8 !important;
+        color: #1a2744 !important;
+        padding: 2px 6px !important;
+        border-radius: 4px !important;
+    }
+    
+    .stMarkdown pre {
+        background: #1a2744 !important;
+        border-radius: 8px !important;
+        padding: 12px !important;
+    }
+    
+    .stMarkdown pre code {
+        background: transparent !important;
+        color: #a8b4ce !important;
+    }
+    
     /* Alerts */
     .stSuccess > div {
         background: rgba(0, 196, 140, 0.1) !important;
@@ -287,6 +310,10 @@ st.markdown("""
         color: #f57c00 !important;
         border-radius: 10px !important;
         border: none !important;
+    }
+    
+    .stWarning > div p, .stWarning > div span {
+        color: #f57c00 !important;
     }
     
     .stInfo > div {
