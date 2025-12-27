@@ -17,7 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
     && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    && apt-get clean \
+    && git config --global --add safe.directory /repo
 
 # Copy requirements first (Docker cache optimization)
 COPY requirements.txt .
