@@ -292,15 +292,44 @@ st.markdown("""
         border-radius: 4px !important;
     }
     
+    /* Code blocks - ensure text is visible */
     .stMarkdown pre {
-        background: #1a2744 !important;
+        background: #1e293b !important;
         border-radius: 8px !important;
-        padding: 12px !important;
+        padding: 16px !important;
     }
     
     .stMarkdown pre code {
         background: transparent !important;
-        color: #a8b4ce !important;
+        color: #e2e8f0 !important;
+        font-size: 14px !important;
+    }
+    
+    /* st.code blocks */
+    .stCodeBlock, 
+    [data-testid="stCodeBlock"] {
+        background: #1e293b !important;
+        border-radius: 8px !important;
+    }
+    
+    .stCodeBlock code,
+    [data-testid="stCodeBlock"] code,
+    .stCodeBlock pre,
+    [data-testid="stCodeBlock"] pre {
+        background: #1e293b !important;
+        color: #e2e8f0 !important;
+    }
+    
+    /* All code elements */
+    pre, code {
+        color: #e2e8f0 !important;
+    }
+    
+    pre {
+        background: #1e293b !important;
+        padding: 16px !important;
+        border-radius: 8px !important;
+        overflow-x: auto !important;
     }
     
     /* Alerts */
