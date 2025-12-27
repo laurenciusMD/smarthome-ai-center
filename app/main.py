@@ -161,20 +161,57 @@ def get_ha_states():
         return []
 
 def get_ha_error_log():
-    """Get error log from Home Assistant."""
+    """Get error log from Home Assistant via system_log service."""
     url = get_ha_url()
     token = get_ha_token()
+    
+    # Try multiple endpoints
+    errors_found = []
+    
+    # Method 1: Try getting persistent notifications (often contain errors)
     try:
         resp = requests.get(
-            f"{url}/api/error_log",
+            f"{url}/api/states",
             headers={"Authorization": f"Bearer {token}"},
             timeout=30
         )
         if resp.status_code == 200:
-            return resp.text
-        return ""
+            states = resp.json()
+            for entity in states:
+                eid = entity.get('entity_id', '')
+                state = entity.get('state', '')
+                attrs = entity.get('attributes', {})
+                
+                # Collect unavailable entities as errors
+                if state == 'unavailable':
+                    errors_found.append(f"ERROR: Entity {eid} is unavailable - {attrs.get('friendly_name', eid)}")
+                
+                # Collect persistent notifications
+                if eid.startswith('persistent_notification.'):
+                    msg = attrs.get('message', '')
+                    if msg:
+                        errors_found.append(f"WARNING: Notification - {msg[:200]}")
     except:
-        return ""
+        pass
+    
+    # Method 2: Check for automations that failed
+    try:
+        resp = requests.get(
+            f"{url}/api/logbook",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=30
+        )
+        if resp.status_code == 200:
+            logbook = resp.json()
+            for entry in logbook[-100:]:  # Last 100 entries
+                msg = entry.get('message', '')
+                name = entry.get('name', '')
+                if 'error' in msg.lower() or 'failed' in msg.lower():
+                    errors_found.append(f"ERROR: {name} - {msg}")
+    except:
+        pass
+    
+    return '\n'.join(errors_found)
 
 def get_ha_services():
     """Get available services from Home Assistant."""
@@ -195,39 +232,30 @@ def get_ha_services():
 def parse_error_log(log_text):
     """Parse error log into structured entries."""
     errors = []
-    current_error = None
     
     for line in log_text.split('\n'):
         line = line.strip()
         if not line:
             continue
-            
-        # Detect error level
-        if 'ERROR' in line.upper():
-            if current_error:
-                errors.append(current_error)
-            current_error = {
-                'level': 'error',
-                'message': line,
-                'details': [],
-                'timestamp': datetime.now().isoformat()
-            }
-        elif 'WARNING' in line.upper():
-            if current_error:
-                errors.append(current_error)
-            current_error = {
-                'level': 'warning', 
-                'message': line,
-                'details': [],
-                'timestamp': datetime.now().isoformat()
-            }
-        elif current_error:
-            current_error['details'].append(line)
+        
+        # Determine level
+        if line.startswith('ERROR:'):
+            level = 'error'
+            message = line[6:].strip()
+        elif line.startswith('WARNING:'):
+            level = 'warning'
+            message = line[8:].strip()
+        else:
+            continue
+        
+        errors.append({
+            'level': level,
+            'message': message,
+            'details': [],
+            'timestamp': datetime.now().isoformat()
+        })
     
-    if current_error:
-        errors.append(current_error)
-    
-    return errors[-50:]  # Last 50 errors
+    return errors
 
 def call_claude(prompt, system_prompt="Du bist ein Home Assistant Experte."):
     """Call Claude API for analysis."""
