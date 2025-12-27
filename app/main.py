@@ -259,6 +259,19 @@ st.markdown("""
         background: white !important;
     }
     
+    .stSelectbox > div > div > div {
+        color: #1a2744 !important;
+    }
+    
+    .stSelectbox [data-baseweb="select"] {
+        color: #1a2744 !important;
+    }
+    
+    .stSelectbox [data-baseweb="select"] > div {
+        color: #1a2744 !important;
+        background: white !important;
+    }
+    
     /* Expander */
     .streamlit-expanderHeader {
         background: white !important;
