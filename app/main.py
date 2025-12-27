@@ -169,12 +169,26 @@ st.markdown("""
         padding: 12px 16px !important;
         font-size: 15px !important;
         background: white !important;
+        color: #1d1d1f !important;
+    }
+    
+    /* Input labels */
+    .stTextInput > label,
+    .stTextArea > label,
+    .stSelectbox > label {
+        color: #1d1d1f !important;
+        font-weight: 500 !important;
     }
     
     .stTextInput > div > div > input:focus,
     .stTextArea > div > div > textarea:focus {
         border-color: #007aff !important;
         box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2) !important;
+    }
+    
+    /* Password input */
+    .stTextInput input[type="password"] {
+        color: #1d1d1f !important;
     }
     
     /* Expander */
@@ -315,7 +329,7 @@ def load_settings():
         "ha_token": "",
         "anthropic_key": "",
         "google_ai_key": "",
-        "github_repo": "laurenciusMD/smarthome-ai-center",
+        "github_repo": "https://github.com/laurenciusMD/smarthome-ai-center.git",
         "theme": "light"
     }
 
@@ -799,6 +813,17 @@ elif page == "⚙️ Einstellungen":
         )
     st.markdown("</div>", unsafe_allow_html=True)
     
+    # GitHub Section  
+    st.markdown("""<div class="apple-card">""", unsafe_allow_html=True)
+    st.subheader("🔄 GitHub Repository")
+    
+    github_repo = st.text_input(
+        "Repository URL",
+        value=settings.get("github_repo", "https://github.com/laurenciusMD/smarthome-ai-center.git"),
+        help="Repository URL für Auto-Updates"
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+    
     # Save button
     if st.button("💾 Einstellungen speichern", type="primary"):
         new_settings = {
@@ -806,7 +831,7 @@ elif page == "⚙️ Einstellungen":
             "ha_token": ha_token,
             "google_ai_key": google_key,
             "anthropic_key": anthropic_key,
-            "github_repo": settings.get("github_repo", ""),
+            "github_repo": github_repo,
             "theme": settings.get("theme", "light")
         }
         save_settings(new_settings)
@@ -818,10 +843,10 @@ elif page == "⚙️ Einstellungen":
     
     # Updates Section
     st.markdown("""<div class="apple-card">""", unsafe_allow_html=True)
-    st.subheader("🔄 Updates")
+    st.subheader("📥 Updates laden")
     
     git_status = get_git_status()
-    st.markdown(f"**Aktueller Stand:** {git_status}")
+    st.markdown(f"**Aktueller Stand:** `{git_status}`")
     
     col1, col2 = st.columns([1, 3])
     with col1:
@@ -832,10 +857,11 @@ elif page == "⚙️ Einstellungen":
                 st.success("✅ Updates geladen! Starte die App neu um Änderungen zu aktivieren.")
                 st.code(output)
             else:
-                st.error(f"❌ Update fehlgeschlagen: {output}")
+                st.error(f"❌ Update fehlgeschlagen")
+                st.code(output)
     
     with col2:
-        st.markdown("*Updates vom GitHub Repository laden*")
+        st.markdown("*Holt die neuesten Änderungen vom Repository*")
     
     st.markdown("</div>", unsafe_allow_html=True)
     
