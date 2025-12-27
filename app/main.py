@@ -1,8 +1,7 @@
 """
-Smart Home AI Center v0.3.0
+Smart Home AI Center v0.4.0
 ===========================
-AI-powered maintenance system for Home Assistant
-Apple-inspired clean design with built-in settings management
+Modern Dashboard Design
 """
 
 import streamlit as st
@@ -18,7 +17,7 @@ import google.generativeai as genai
 # ============================================
 # CONFIG & CONSTANTS
 # ============================================
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.4.0"
 CONFIG_FILE = Path("/config/settings.json")
 CONFIG_DIR = Path("/config")
 
@@ -33,281 +32,293 @@ st.set_page_config(
 )
 
 # ============================================
-# APPLE-STYLE CSS
+# MODERN DASHBOARD CSS
 # ============================================
 st.markdown("""
 <style>
-    /* Import SF Pro-like font */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
     
-    /* Global styles - Light Apple theme */
-    .stApp {
-        background: linear-gradient(180deg, #f5f5f7 0%, #ffffff 100%);
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    * {
+        font-family: 'Poppins', sans-serif;
     }
     
-    /* Hide Streamlit branding */
+    .stApp {
+        background: #f0f4f8;
+    }
+    
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* Main content area */
     .main .block-container {
-        padding: 2rem 3rem;
+        padding: 2rem;
         max-width: 1400px;
     }
     
-    /* Sidebar - Apple style */
+    /* Dark Sidebar */
     section[data-testid="stSidebar"] {
-        background: rgba(255, 255, 255, 0.8);
-        backdrop-filter: blur(20px);
-        border-right: 1px solid rgba(0, 0, 0, 0.1);
+        background: linear-gradient(180deg, #1a2744 0%, #141d32 100%);
     }
     
-    section[data-testid="stSidebar"] .block-container {
-        padding-top: 2rem;
+    section[data-testid="stSidebar"] * {
+        color: #8896ab !important;
     }
     
-    /* Typography */
-    h1 {
-        font-weight: 600 !important;
-        font-size: 2.5rem !important;
-        color: #1d1d1f !important;
-        letter-spacing: -0.02em;
+    section[data-testid="stSidebar"] .stRadio > div > label[data-checked="true"] {
+        color: #4dabf7 !important;
+        background: rgba(77, 171, 247, 0.1) !important;
+        border-radius: 8px;
     }
     
-    h2, h3 {
-        font-weight: 600 !important;
-        color: #1d1d1f !important;
-        letter-spacing: -0.01em;
-    }
-    
-    p, li, span {
-        color: #424245;
-        line-height: 1.6;
-    }
-    
-    /* Apple-style cards */
-    .apple-card {
-        background: white;
-        border-radius: 18px;
-        padding: 24px;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-        border: 1px solid rgba(0, 0, 0, 0.04);
-        margin-bottom: 16px;
-        transition: all 0.3s ease;
-    }
-    
-    .apple-card:hover {
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
-        transform: translateY(-2px);
-    }
-    
-    /* Metric cards */
-    .metric-container {
+    /* Metric Cards */
+    .metric-card {
         background: white;
         border-radius: 16px;
-        padding: 20px 24px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-        text-align: center;
-        border: 1px solid rgba(0, 0, 0, 0.04);
+        padding: 24px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        height: 140px;
     }
     
-    .metric-value {
-        font-size: 42px;
-        font-weight: 600;
-        color: #1d1d1f;
-        line-height: 1.1;
+    .metric-info h2 {
+        font-size: 36px;
+        font-weight: 700;
+        color: #1a2744;
+        margin: 0;
+        line-height: 1;
     }
     
-    .metric-label {
+    .metric-info p {
+        font-size: 14px;
+        color: #8896ab;
+        margin: 8px 0 0 0;
+    }
+    
+    .metric-info .change {
         font-size: 13px;
-        color: #86868b;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+        font-weight: 600;
         margin-top: 8px;
     }
     
-    /* Status indicators */
-    .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        display: inline-block;
-        margin-right: 8px;
+    .change.up { color: #00c48c; }
+    .change.down { color: #ff6b6b; }
+    
+    .metric-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        color: white;
     }
     
-    .status-online { background: #34c759; }
-    .status-offline { background: #ff3b30; }
-    .status-warning { background: #ff9500; }
+    .icon-yellow { background: linear-gradient(135deg, #ffc107, #ffb300); }
+    .icon-cyan { background: linear-gradient(135deg, #00d4ff, #00bcd4); }
+    .icon-green { background: linear-gradient(135deg, #00c48c, #00a676); }
+    .icon-purple { background: linear-gradient(135deg, #7c4dff, #651fff); }
+    .icon-red { background: linear-gradient(135deg, #ff6b6b, #f44336); }
+    .icon-blue { background: linear-gradient(135deg, #4dabf7, #2196f3); }
     
-    /* Buttons - Apple style */
+    /* Content Cards */
+    .content-card {
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        margin-bottom: 16px;
+    }
+    
+    .content-card h3 {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1a2744;
+        margin: 0 0 16px 0;
+    }
+    
+    /* Status Badge */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border-radius: 24px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    
+    .status-online {
+        background: rgba(0, 196, 140, 0.12);
+        color: #00c48c;
+    }
+    
+    .status-offline {
+        background: rgba(255, 107, 107, 0.12);
+        color: #ff6b6b;
+    }
+    
+    /* Logo */
+    .logo {
+        color: white !important;
+        font-size: 22px;
+        font-weight: 700;
+        padding: 16px 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    /* List items */
+    .list-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid #f0f4f8;
+    }
+    
+    .list-item:last-child {
+        border-bottom: none;
+    }
+    
+    .list-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 12px;
+        font-size: 16px;
+    }
+    
+    .list-content {
+        flex: 1;
+    }
+    
+    .list-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: #1a2744;
+        margin: 0;
+    }
+    
+    .list-subtitle {
+        font-size: 12px;
+        color: #8896ab;
+        margin: 2px 0 0 0;
+    }
+    
+    /* Buttons */
     .stButton > button {
-        background: #007aff !important;
+        background: linear-gradient(135deg, #ff6b6b, #f44336) !important;
         color: white !important;
         border: none !important;
-        border-radius: 12px !important;
+        border-radius: 10px !important;
         padding: 12px 24px !important;
-        font-weight: 500 !important;
-        font-size: 15px !important;
-        transition: all 0.2s ease !important;
-        box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3) !important;
+        font-weight: 600 !important;
+        font-size: 14px !important;
+        box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3) !important;
     }
     
     .stButton > button:hover {
-        background: #0056b3 !important;
-        transform: scale(1.02);
-        box-shadow: 0 4px 12px rgba(0, 122, 255, 0.4) !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 16px rgba(244, 67, 54, 0.4) !important;
     }
     
-    /* Input fields */
+    /* Input Fields */
     .stTextInput > div > div > input,
-    .stTextArea > div > div > textarea,
-    .stSelectbox > div > div > div {
+    .stTextArea > div > div > textarea {
         border-radius: 10px !important;
-        border: 1px solid #d2d2d7 !important;
+        border: 2px solid #e8ecf0 !important;
         padding: 12px 16px !important;
-        font-size: 15px !important;
+        font-size: 14px !important;
         background: white !important;
-        color: #1d1d1f !important;
-    }
-    
-    /* Input labels */
-    .stTextInput > label,
-    .stTextArea > label,
-    .stSelectbox > label {
-        color: #1d1d1f !important;
-        font-weight: 500 !important;
+        color: #1a2744 !important;
     }
     
     .stTextInput > div > div > input:focus,
     .stTextArea > div > div > textarea:focus {
-        border-color: #007aff !important;
-        box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2) !important;
+        border-color: #4dabf7 !important;
+        box-shadow: 0 0 0 3px rgba(77, 171, 247, 0.1) !important;
     }
     
-    /* Password input */
-    .stTextInput input[type="password"] {
-        color: #1d1d1f !important;
+    .stTextInput > label,
+    .stTextArea > label,
+    .stSelectbox > label {
+        color: #1a2744 !important;
+        font-weight: 500 !important;
+    }
+    
+    /* Selectbox */
+    .stSelectbox > div > div {
+        border-radius: 10px !important;
+        border: 2px solid #e8ecf0 !important;
+        background: white !important;
     }
     
     /* Expander */
     .streamlit-expanderHeader {
         background: white !important;
         border-radius: 12px !important;
-        border: 1px solid rgba(0, 0, 0, 0.06) !important;
         font-weight: 500 !important;
+        color: #1a2744 !important;
     }
     
-    /* Success/Error/Warning messages */
+    /* Alerts */
     .stSuccess > div {
-        background: rgba(52, 199, 89, 0.1) !important;
-        border-radius: 12px !important;
-        border: 1px solid rgba(52, 199, 89, 0.2) !important;
-        color: #248a3d !important;
+        background: rgba(0, 196, 140, 0.1) !important;
+        color: #00a676 !important;
+        border-radius: 10px !important;
+        border: none !important;
     }
     
     .stError > div {
-        background: rgba(255, 59, 48, 0.1) !important;
-        border-radius: 12px !important;
-        border: 1px solid rgba(255, 59, 48, 0.2) !important;
-        color: #d70015 !important;
+        background: rgba(255, 107, 107, 0.1) !important;
+        color: #d32f2f !important;
+        border-radius: 10px !important;
+        border: none !important;
     }
     
     .stWarning > div {
-        background: rgba(255, 149, 0, 0.1) !important;
-        border-radius: 12px !important;
-        border: 1px solid rgba(255, 149, 0, 0.2) !important;
-        color: #c93400 !important;
+        background: rgba(255, 193, 7, 0.1) !important;
+        color: #f57c00 !important;
+        border-radius: 10px !important;
+        border: none !important;
     }
     
     .stInfo > div {
-        background: rgba(0, 122, 255, 0.1) !important;
-        border-radius: 12px !important;
-        border: 1px solid rgba(0, 122, 255, 0.2) !important;
-        color: #0056b3 !important;
-    }
-    
-    /* Code blocks */
-    .stCodeBlock {
-        border-radius: 12px !important;
-        border: 1px solid rgba(0, 0, 0, 0.06) !important;
+        background: rgba(77, 171, 247, 0.1) !important;
+        color: #1976d2 !important;
+        border-radius: 10px !important;
+        border: none !important;
     }
     
     /* Divider */
     hr {
         border: none;
         height: 1px;
-        background: rgba(0, 0, 0, 0.08);
-        margin: 24px 0;
+        background: #e8ecf0;
+        margin: 20px 0;
     }
     
-    /* Logo styling */
-    .app-logo {
-        font-size: 24px;
-        font-weight: 600;
-        color: #1d1d1f;
-        margin-bottom: 20px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    
-    /* Version badge */
-    .version-badge {
-        background: #f5f5f7;
-        color: #86868b;
-        padding: 3px 8px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: 500;
-    }
-    
-    /* Connection status */
-    .connection-status {
-        display: flex;
-        align-items: center;
-        padding: 10px 14px;
-        border-radius: 10px;
-        margin: 12px 0;
-        font-size: 13px;
-        font-weight: 500;
-    }
-    
-    .connection-online {
-        background: rgba(52, 199, 89, 0.15);
-        color: #248a3d;
-    }
-    
-    .connection-offline {
-        background: rgba(255, 59, 48, 0.15);
-        color: #d70015;
-    }
-    
-    /* Radio buttons as pills */
+    /* Radio as Nav */
     .stRadio > div {
-        gap: 8px;
+        flex-direction: column;
+        gap: 4px;
     }
     
     .stRadio > div > label {
-        background: white;
-        border: 1px solid #d2d2d7;
-        border-radius: 10px;
-        padding: 10px 16px;
-        margin: 2px 0;
-        cursor: pointer;
+        padding: 12px 16px !important;
+        border-radius: 8px !important;
+        margin: 0 !important;
         transition: all 0.2s ease;
     }
     
     .stRadio > div > label:hover {
-        border-color: #007aff;
-        background: rgba(0, 122, 255, 0.05);
-    }
-    
-    .stRadio > div > label[data-checked="true"] {
-        background: #007aff;
-        border-color: #007aff;
-        color: white;
+        background: rgba(255, 255, 255, 0.05);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -342,7 +353,6 @@ def save_settings(settings):
 def get_setting(key, default=""):
     """Get a setting value."""
     settings = load_settings()
-    # First check environment variables (for Docker compatibility)
     env_map = {
         "ha_url": "HA_URL",
         "ha_token": "HA_TOKEN", 
@@ -362,8 +372,6 @@ if 'settings' not in st.session_state:
     st.session_state.settings = load_settings()
 if 'ha_cache' not in st.session_state:
     st.session_state.ha_cache = None
-if 'ha_cache_time' not in st.session_state:
-    st.session_state.ha_cache_time = None
 if 'error_logs' not in st.session_state:
     st.session_state.error_logs = []
 if 'analysis_results' not in st.session_state:
@@ -455,9 +463,7 @@ def ask_claude(prompt: str) -> str:
 
 def git_pull_updates():
     """Pull latest updates from GitHub."""
-    # Try multiple possible locations
     git_dirs = ["/app", "/data", os.getcwd()]
-    
     for git_dir in git_dirs:
         git_path = os.path.join(git_dir, ".git")
         if os.path.exists(git_path):
@@ -472,13 +478,11 @@ def git_pull_updates():
                 return result.returncode == 0, result.stdout + result.stderr
             except Exception as e:
                 return False, str(e)
-    
-    return False, "Kein Git Repository gefunden. Updates müssen manuell auf dem Host ausgeführt werden:\n\ncd /DATA/AppData/smarthome-ai-center\ngit pull\ndocker compose up -d --build"
+    return False, "Manuelles Update nötig:\ncd /DATA/AppData/smarthome-ai-center && git pull && docker compose up -d --build"
 
 def get_git_status():
     """Get current git status."""
     git_dirs = ["/app", "/data", os.getcwd()]
-    
     for git_dir in git_dirs:
         git_path = os.path.join(git_dir, ".git")
         if os.path.exists(git_path):
@@ -494,44 +498,27 @@ def get_git_status():
                     return result.stdout.strip()
             except:
                 pass
-    
-    return "v" + APP_VERSION + " (lokale Installation)"
+    return f"v{APP_VERSION}"
 
 # ============================================
 # SIDEBAR
 # ============================================
 with st.sidebar:
-    # Logo
-    st.markdown(f"""
-        <div class="app-logo">
-            🏠 AI Center
-            <span class="version-badge">v{APP_VERSION}</span>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f'<div class="logo">🏠 AI Center</div>', unsafe_allow_html=True)
     
     # Connection Status
     connected, status_msg = check_ha_connection()
     if connected:
-        st.markdown("""
-            <div class="connection-status connection-online">
-                <span class="status-dot status-online"></span>
-                Home Assistant verbunden
-            </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f'<div class="status-badge status-online">● {status_msg}</div>', unsafe_allow_html=True)
     else:
-        st.markdown(f"""
-            <div class="connection-status connection-offline">
-                <span class="status-dot status-offline"></span>
-                {status_msg}
-            </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f'<div class="status-badge status-offline">● {status_msg}</div>', unsafe_allow_html=True)
     
-    st.markdown("---")
+    st.markdown("<br>", unsafe_allow_html=True)
     
     # Navigation
     page = st.radio(
-        "Navigation",
-        ["🏠 Dashboard", "🔍 Bug-Hunter", "📈 Analyst", "🏗️ Architect", "⚙️ Einstellungen"],
+        "",
+        ["🏠 Dashboard", "🔍 Bug-Hunter", "📊 Analyst", "🛠️ Architect", "⚙️ Einstellungen"],
         label_visibility="collapsed"
     )
 
@@ -539,68 +526,71 @@ with st.sidebar:
 # PAGE: DASHBOARD
 # ============================================
 if page == "🏠 Dashboard":
-    st.title("Dashboard")
-    st.markdown("Übersicht über dein Smart Home System")
-    
-    # Refresh button
-    col1, col2, col3 = st.columns([1, 1, 4])
-    with col1:
-        if st.button("🔄 Aktualisieren"):
-            st.session_state.ha_cache = None
-            st.rerun()
+    st.markdown("## Dashboard")
     
     # Get data
     entities = get_ha_states()
     errors = get_ha_errors()
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Metrics row
+    # Metrics Row
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         st.markdown(f"""
-            <div class="metric-container">
-                <div class="metric-value">{len(entities)}</div>
-                <div class="metric-label">Entitäten</div>
+        <div class="metric-card">
+            <div class="metric-info">
+                <h2>{len(entities)}</h2>
+                <p>Entitäten</p>
             </div>
+            <div class="metric-icon icon-yellow">📊</div>
+        </div>
         """, unsafe_allow_html=True)
     
     with col2:
         unavailable = len([e for e in entities if e.get('state') == 'unavailable'])
+        change_class = "down" if unavailable > 0 else "up"
         st.markdown(f"""
-            <div class="metric-container">
-                <div class="metric-value" style="color: {'#ff3b30' if unavailable > 0 else '#34c759'}">{unavailable}</div>
-                <div class="metric-label">Nicht verfügbar</div>
+        <div class="metric-card">
+            <div class="metric-info">
+                <h2>{unavailable}</h2>
+                <p>Nicht verfügbar</p>
+                <div class="change {change_class}">{'↓' if unavailable == 0 else '↑'} {unavailable}</div>
             </div>
+            <div class="metric-icon icon-{'red' if unavailable > 0 else 'green'}">⚠️</div>
+        </div>
         """, unsafe_allow_html=True)
     
     with col3:
         lights_on = len([e for e in entities if e.get('entity_id', '').startswith('light.') and e.get('state') == 'on'])
         st.markdown(f"""
-            <div class="metric-container">
-                <div class="metric-value" style="color: #ff9500">{lights_on}</div>
-                <div class="metric-label">Lichter an</div>
+        <div class="metric-card">
+            <div class="metric-info">
+                <h2>{lights_on}</h2>
+                <p>Lichter an</p>
             </div>
+            <div class="metric-icon icon-cyan">💡</div>
+        </div>
         """, unsafe_allow_html=True)
     
     with col4:
         automations = len([e for e in entities if e.get('entity_id', '').startswith('automation.')])
         st.markdown(f"""
-            <div class="metric-container">
-                <div class="metric-value">{automations}</div>
-                <div class="metric-label">Automationen</div>
+        <div class="metric-card">
+            <div class="metric-info">
+                <h2>{automations}</h2>
+                <p>Automationen</p>
             </div>
+            <div class="metric-icon icon-purple">⚡</div>
+        </div>
         """, unsafe_allow_html=True)
     
     st.markdown("<br>", unsafe_allow_html=True)
     
     # Two columns
-    col_left, col_right = st.columns(2)
+    col_left, col_right = st.columns([2, 1])
     
     with col_left:
-        st.markdown("""<div class="apple-card">""", unsafe_allow_html=True)
-        st.subheader("📊 Entitäten nach Domain")
+        st.markdown("""<div class="content-card"><h3>📊 Entitäten nach Domain</h3>""", unsafe_allow_html=True)
         
         if entities:
             domains = {}
@@ -609,114 +599,117 @@ if page == "🏠 Dashboard":
                 domains[domain] = domains.get(domain, 0) + 1
             
             sorted_domains = sorted(domains.items(), key=lambda x: x[1], reverse=True)[:8]
+            
             for domain, count in sorted_domains:
-                st.markdown(f"**{domain}** · {count}")
+                icon = {"light": "💡", "sensor": "📡", "switch": "🔘", "automation": "⚡", 
+                        "binary_sensor": "🔴", "climate": "🌡️", "media_player": "🎵", "person": "👤"}.get(domain, "📦")
+                st.markdown(f"""
+                <div class="list-item">
+                    <div class="list-icon" style="background: #f0f4f8;">{icon}</div>
+                    <div class="list-content">
+                        <p class="list-title">{domain}</p>
+                        <p class="list-subtitle">{count} Entitäten</p>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        
         st.markdown("</div>", unsafe_allow_html=True)
     
     with col_right:
-        st.markdown("""<div class="apple-card">""", unsafe_allow_html=True)
-        st.subheader("⚠️ Probleme")
+        st.markdown("""<div class="content-card"><h3>⚠️ Aktuelle Probleme</h3>""", unsafe_allow_html=True)
         
         if errors:
             for err in errors[:5]:
-                st.markdown(f"🔴 {err['message'][:60]}...")
+                entity_id = err.get('entity_id', '')
+                domain = entity_id.split('.')[0] if entity_id else 'unknown'
+                st.markdown(f"""
+                <div class="list-item">
+                    <div class="list-icon" style="background: rgba(255,107,107,0.1); color: #ff6b6b;">❌</div>
+                    <div class="list-content">
+                        <p class="list-title">{err['message'][:35]}...</p>
+                        <p class="list-subtitle">{domain}</p>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
             if len(errors) > 5:
-                st.markdown(f"*... und {len(errors) - 5} weitere*")
+                st.markdown(f"<p style='color:#8896ab; font-size:13px;'>+ {len(errors) - 5} weitere</p>", unsafe_allow_html=True)
         else:
-            st.success("✅ Keine Probleme erkannt!")
+            st.success("✅ Keine Probleme!")
+        
         st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Refresh button
+    if st.button("🔄 Aktualisieren"):
+        st.rerun()
 
 # ============================================
 # PAGE: BUG-HUNTER
 # ============================================
 elif page == "🔍 Bug-Hunter":
-    st.title("Bug-Hunter")
-    st.markdown("Finde und behebe Probleme in deinem System")
+    st.markdown("## Bug-Hunter")
+    st.markdown("Finde und behebe Probleme mit KI-Unterstützung")
     
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        if st.button("🔄 Probleme laden"):
-            st.session_state.error_logs = get_ha_errors()
-            st.rerun()
+    if st.button("🔄 Probleme laden"):
+        st.session_state.error_logs = get_ha_errors()
+        st.rerun()
     
     errors = st.session_state.error_logs
     
-    st.markdown(f"**{len(errors)} Probleme gefunden**")
-    st.markdown("---")
+    st.markdown(f"""<div class="content-card"><h3>🐛 {len(errors)} Probleme gefunden</h3>""", unsafe_allow_html=True)
     
     if not errors:
-        st.success("🎉 Keine Probleme gefunden! Dein System läuft einwandfrei.")
+        st.success("🎉 Keine Probleme! Dein System läuft einwandfrei.")
     else:
-        for i, err in enumerate(errors[:20]):  # Limit to 20
-            with st.expander(f"🔴 {err['message'][:70]}...", expanded=False):
-                st.markdown(f"**Entity ID:** `{err.get('entity_id', 'N/A')}`")
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        for i, err in enumerate(errors[:15]):
+            with st.expander(f"🔴 {err['message'][:60]}..."):
+                st.code(err.get('entity_id', 'N/A'))
                 
-                if st.button(f"🤖 Mit Gemini analysieren", key=f"analyze_{i}"):
-                    with st.spinner("Analysiere..."):
-                        prompt = f"""Du bist ein Home Assistant Experte. Analysiere dieses Problem:
+                if st.button(f"🤖 Analysieren", key=f"analyze_{i}"):
+                    with st.spinner("Gemini analysiert..."):
+                        prompt = f"""Home Assistant Problem:
+{err['message']}
+Entity: {err.get('entity_id', 'N/A')}
 
-PROBLEM: {err['message']}
-ENTITY: {err.get('entity_id', 'N/A')}
-
-Antworte auf Deutsch, kurz und präzise:
+Antworte auf Deutsch:
 1. Mögliche Ursache
-2. Lösungsvorschlag
-"""
+2. Lösung"""
                         solution = ask_gemini(prompt)
-                    st.markdown("### Analyse")
                     st.markdown(solution)
+    
+    if errors:
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================================
 # PAGE: ANALYST
 # ============================================
-elif page == "📈 Analyst":
-    st.title("System Analyst")
-    st.markdown("Analysiere dein Smart Home auf Optimierungspotential")
+elif page == "📊 Analyst":
+    st.markdown("## System Analyst")
+    st.markdown("KI-gestützte Analyse deines Smart Homes")
     
-    # Model selection
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        model = st.selectbox(
-            "AI Modell",
-            ["Gemini Flash (günstig)", "Claude (präziser)"]
-        )
+    st.markdown("""<div class="content-card">""", unsafe_allow_html=True)
     
-    with col2:
-        if "Gemini" in model:
-            st.info("💰 Gemini: ~0.001€ pro Analyse")
-        else:
-            st.warning("💎 Claude: ~0.02€ pro Analyse")
+    model = st.selectbox("KI Modell", ["Gemini Flash (günstig)", "Claude (präziser)"])
     
-    if st.button("🚀 Analyse starten", type="primary"):
-        with st.spinner("Analysiere System..."):
+    if st.button("🚀 Analyse starten"):
+        with st.spinner("Analysiere..."):
             states = get_ha_states()
             
-            # Build summary
             summary = {
                 'total': len(states),
                 'unavailable': len([e for e in states if e.get('state') == 'unavailable']),
                 'lights_on': len([e for e in states if e.get('entity_id', '').startswith('light.') and e.get('state') == 'on']),
-                'domains': {}
             }
             
-            for e in states:
-                domain = e.get('entity_id', '').split('.')[0]
-                summary['domains'][domain] = summary['domains'].get(domain, 0) + 1
-            
-            prompt = f"""Analysiere dieses Smart Home System und gib Optimierungsvorschläge:
+            prompt = f"""Smart Home Analyse:
+- {summary['total']} Entitäten
+- {summary['unavailable']} nicht verfügbar  
+- {summary['lights_on']} Lichter an
 
-ÜBERSICHT:
-- Gesamt Entitäten: {summary['total']}
-- Nicht verfügbar: {summary['unavailable']}
-- Lichter an: {summary['lights_on']}
+Gib 5 konkrete Optimierungsvorschläge auf Deutsch."""
 
-DOMAINS:
-{json.dumps(summary['domains'], indent=2)}
-
-Gib 5-10 konkrete Verbesserungsvorschläge auf Deutsch.
-Fokus auf: Energieeffizienz, Automatisierung, Problemlösung.
-"""
-            
             if "Gemini" in model:
                 result = ask_gemini(prompt)
             else:
@@ -724,58 +717,50 @@ Fokus auf: Energieeffizienz, Automatisierung, Problemlösung.
             
             st.session_state.analysis_results = result
     
+    st.markdown("</div>", unsafe_allow_html=True)
+    
     if st.session_state.analysis_results:
-        st.markdown("---")
-        st.subheader("📋 Ergebnisse")
+        st.markdown("""<div class="content-card"><h3>📋 Ergebnisse</h3>""", unsafe_allow_html=True)
         st.markdown(st.session_state.analysis_results)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================================
 # PAGE: ARCHITECT
 # ============================================
-elif page == "🏗️ Architect":
-    st.title("Automation Architect")
-    st.markdown("Erstelle neue Automationen mit AI-Unterstützung")
+elif page == "🛠️ Architect":
+    st.markdown("## Automation Architect")
+    st.markdown("Erstelle Automationen mit KI")
     
-    # Load entities for context
-    entities = get_ha_states()
-    entity_ids = [e.get('entity_id', '') for e in entities][:100]  # First 100
-    
-    st.markdown("""<div class="apple-card">""", unsafe_allow_html=True)
+    st.markdown("""<div class="content-card">""", unsafe_allow_html=True)
     
     description = st.text_area(
-        "Beschreibe deine gewünschte Automation",
-        placeholder="z.B.: Schalte das Licht im Flur ein wenn Bewegung erkannt wird, aber nur nachts zwischen 22 und 6 Uhr",
-        height=120
+        "Beschreibe deine Automation",
+        placeholder="z.B.: Schalte das Licht im Flur ein wenn Bewegung erkannt wird, aber nur nachts",
+        height=100
     )
     
-    output_format = st.selectbox(
-        "Ausgabeformat",
-        ["Home Assistant YAML", "Node-RED JSON", "Python Script"]
-    )
+    output_format = st.selectbox("Format", ["Home Assistant YAML", "Node-RED JSON", "Python Script"])
     
-    if st.button("🪄 Automation erstellen", type="primary"):
+    if st.button("🪄 Erstellen"):
         if description:
-            with st.spinner("Claude erstellt deine Automation..."):
-                prompt = f"""Erstelle eine Home Assistant Automation basierend auf dieser Beschreibung:
+            with st.spinner("Claude erstellt..."):
+                entities = get_ha_states()
+                entity_ids = [e.get('entity_id', '') for e in entities][:50]
+                
+                prompt = f"""Erstelle eine Home Assistant Automation:
 
 BESCHREIBUNG: {description}
+FORMAT: {output_format}
+ENTITÄTEN: {', '.join(entity_ids[:20])}
 
-VERFÜGBARE ENTITÄTEN (Auswahl):
-{chr(10).join(entity_ids[:50])}
-
-AUSGABEFORMAT: {output_format}
-
-Antworte auf Deutsch mit:
-1. Kurze Erklärung was die Automation macht
-2. Den vollständigen Code
-3. Installationshinweise
-"""
+Antworte auf Deutsch mit Code."""
+                
                 result = ask_claude(prompt)
             
-            st.markdown("### Deine Automation")
+            st.markdown("### Ergebnis")
             st.markdown(result)
         else:
-            st.warning("Bitte beschreibe zuerst deine gewünschte Automation.")
+            st.warning("Bitte beschreibe deine Automation.")
     
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -783,136 +768,96 @@ Antworte auf Deutsch mit:
 # PAGE: SETTINGS
 # ============================================
 elif page == "⚙️ Einstellungen":
-    st.title("Einstellungen")
-    st.markdown("Konfiguriere deine Verbindungen und API Keys")
+    st.markdown("## Einstellungen")
     
     settings = st.session_state.settings
     
-    # Home Assistant Section
-    st.markdown("""<div class="apple-card">""", unsafe_allow_html=True)
-    st.subheader("🏠 Home Assistant")
+    # Home Assistant
+    st.markdown("""<div class="content-card"><h3>🏠 Home Assistant</h3>""", unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
     with col1:
-        ha_url = st.text_input(
-            "Home Assistant URL",
-            value=settings.get("ha_url", ""),
-            placeholder="http://192.168.1.100:8123"
-        )
+        ha_url = st.text_input("URL", value=settings.get("ha_url", ""), placeholder="http://192.168.1.100:8123")
     with col2:
-        ha_token = st.text_input(
-            "Long-Lived Access Token",
-            value=settings.get("ha_token", ""),
-            type="password",
-            help="Erstelle unter: Profil → Sicherheit → Langlebige Zugangstoken"
-        )
+        ha_token = st.text_input("Token", value=settings.get("ha_token", ""), type="password")
+    
     st.markdown("</div>", unsafe_allow_html=True)
     
-    # AI Keys Section
-    st.markdown("""<div class="apple-card">""", unsafe_allow_html=True)
-    st.subheader("🤖 AI API Keys")
+    # AI Keys
+    st.markdown("""<div class="content-card"><h3>🤖 AI API Keys</h3>""", unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
     with col1:
-        google_key = st.text_input(
-            "Google AI Key (Gemini)",
-            value=settings.get("google_ai_key", ""),
-            type="password",
-            help="Kostenlos unter: aistudio.google.com/apikey"
-        )
+        google_key = st.text_input("Google AI (Gemini)", value=settings.get("google_ai_key", ""), type="password")
     with col2:
-        anthropic_key = st.text_input(
-            "Anthropic API Key (Claude)",
-            value=settings.get("anthropic_key", ""),
-            type="password",
-            help="Unter: console.anthropic.com"
-        )
+        anthropic_key = st.text_input("Anthropic (Claude)", value=settings.get("anthropic_key", ""), type="password")
+    
     st.markdown("</div>", unsafe_allow_html=True)
     
-    # GitHub Section  
-    st.markdown("""<div class="apple-card">""", unsafe_allow_html=True)
-    st.subheader("🔄 GitHub Repository")
+    # GitHub
+    st.markdown("""<div class="content-card"><h3>📦 GitHub</h3>""", unsafe_allow_html=True)
     
-    github_repo = st.text_input(
-        "Repository URL",
-        value=settings.get("github_repo", "https://github.com/laurenciusMD/smarthome-ai-center.git"),
-        help="Repository URL für Auto-Updates"
-    )
+    github_repo = st.text_input("Repository", value=settings.get("github_repo", "https://github.com/laurenciusMD/smarthome-ai-center.git"))
+    
+    st.markdown(f"**Version:** `{get_git_status()}`")
+    
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        if st.button("📥 Updates"):
+            with st.spinner("Lade..."):
+                success, output = git_pull_updates()
+            if success:
+                st.success("✅ Updates geladen!")
+            else:
+                st.error("Manuell updaten")
+                st.code(output)
+    
     st.markdown("</div>", unsafe_allow_html=True)
     
-    # Save button
-    if st.button("💾 Einstellungen speichern", type="primary"):
+    # Save
+    if st.button("💾 Speichern"):
         new_settings = {
             "ha_url": ha_url,
             "ha_token": ha_token,
             "google_ai_key": google_key,
             "anthropic_key": anthropic_key,
             "github_repo": github_repo,
-            "theme": settings.get("theme", "light")
+            "theme": "light"
         }
         save_settings(new_settings)
         st.session_state.settings = new_settings
         st.balloons()
-        st.success("✅ Einstellungen erfolgreich gespeichert!")
-        import time
-        time.sleep(1)
-        st.rerun()
+        st.success("✅ Gespeichert!")
     
     st.markdown("---")
     
-    # Updates Section
-    st.markdown("""<div class="apple-card">""", unsafe_allow_html=True)
-    st.subheader("📥 Updates laden")
-    
-    git_status = get_git_status()
-    st.markdown(f"**Aktueller Stand:** `{git_status}`")
-    
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        if st.button("📥 Updates laden"):
-            with st.spinner("Lade Updates von GitHub..."):
-                success, output = git_pull_updates()
-            if success:
-                st.success("✅ Updates geladen! Starte die App neu um Änderungen zu aktivieren.")
-                st.code(output)
-            else:
-                st.error(f"❌ Update fehlgeschlagen")
-                st.code(output)
-    
-    with col2:
-        st.markdown("*Holt die neuesten Änderungen vom Repository*")
-    
-    st.markdown("</div>", unsafe_allow_html=True)
-    
-    # Connection Test
-    st.markdown("---")
-    st.markdown("""<div class="apple-card">""", unsafe_allow_html=True)
-    st.subheader("🧪 Verbindungstest")
+    # Connection Tests
+    st.markdown("""<div class="content-card"><h3>🧪 Verbindungstest</h3>""", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("Test Home Assistant"):
-            connected, msg = check_ha_connection()
-            if connected:
-                st.success(f"✅ {msg}")
+        if st.button("Test HA"):
+            ok, msg = check_ha_connection()
+            if ok:
+                st.success("✅ OK")
             else:
                 st.error(f"❌ {msg}")
     
     with col2:
         if st.button("Test Gemini"):
-            result = ask_gemini("Sag nur 'OK' wenn du funktionierst.")
-            if "OK" in result or "ok" in result.lower():
-                st.success("✅ Gemini verbunden")
+            r = ask_gemini("Sag OK")
+            if "OK" in r.upper():
+                st.success("✅ OK")
             else:
-                st.error(f"❌ {result[:100]}")
+                st.error("❌ Fehler")
     
     with col3:
         if st.button("Test Claude"):
-            result = ask_claude("Sag nur 'OK' wenn du funktionierst.")
-            if "OK" in result or "ok" in result.lower():
-                st.success("✅ Claude verbunden")
+            r = ask_claude("Sag OK")
+            if "OK" in r.upper():
+                st.success("✅ OK")
             else:
-                st.error(f"❌ {result[:100]}")
+                st.error("❌ Fehler")
     
     st.markdown("</div>", unsafe_allow_html=True)
