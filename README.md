@@ -1,110 +1,107 @@
 # 🏠 Smart Home AI Center
 
-Ein Docker-basiertes Wartungs- und Entwicklungssystem für Home Assistant mit AI-Unterstützung.
+AI-powered maintenance system for Home Assistant with a clean Apple-inspired design.
 
-## Features
+![Version](https://img.shields.io/badge/version-0.3.0-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-- **📊 Dashboard** - Übersicht über den System-Status und AI-Tipps
-- **🔍 Bug-Hunter** - Automatische Fehleranalyse mit Claude AI
-- **📈 48h Analyst** - Sensor-Daten Analyse und Optimierungsvorschläge
-- **🏗️ Architect** - Custom Automations Generator
+## ✨ Features
 
-## Voraussetzungen
+- **Dashboard** - Overview of all entities, problems, and system status
+- **Bug-Hunter** - Find and fix unavailable entities with AI analysis (Gemini)
+- **Analyst** - Get AI-powered optimization suggestions for your smart home
+- **Architect** - Generate automations from natural language descriptions (Claude)
+- **Settings UI** - Configure everything from the web interface
+- **Auto-Updates** - Pull updates from GitHub directly in the app
 
-- Docker & Docker Compose (CasaOS oder ähnliches)
-- Home Assistant mit aktivierter API
-- Anthropic API Key (für Claude)
+## 🚀 Quick Start
 
-## Quick Start
-
-### 1. Repository klonen oder Dateien kopieren
+### 1. Clone the repository
 
 ```bash
-cd /DATA/AppData  # oder dein CasaOS App-Verzeichnis
-git clone <repository> smarthome-ai-center
+git clone https://github.com/laurenciusMD/smarthome-ai-center.git
 cd smarthome-ai-center
 ```
 
-### 2. Environment konfigurieren
+### 2. Start the containers
 
 ```bash
-cp .env.example .env
-nano .env  # Alle Werte ausfüllen!
+docker compose up -d --build
 ```
 
-**Wichtig:** Fülle mindestens diese Werte aus:
-- `HA_URL` - Deine Home Assistant URL
-- `HA_TOKEN` - Long-Lived Access Token aus HA
-- `ANTHROPIC_API_KEY` - Dein Claude API Key
-- `INFLUX_ADMIN_PASSWORD` - Ein sicheres Passwort
-- `INFLUX_TOKEN` - Generiere mit: `openssl rand -hex 32`
+### 3. Open the app
 
-### 3. Container starten
+Navigate to `http://YOUR_SERVER_IP:8501`
+
+### 4. Configure in the UI
+
+Go to **⚙️ Einstellungen** and enter:
+- Your Home Assistant URL and Token
+- Google AI Key (free at aistudio.google.com)
+- Anthropic API Key (optional, for better automation generation)
+
+## 🔧 Configuration
+
+All configuration is done through the web UI. Settings are stored locally in `./config/settings.json`.
+
+**No API keys or tokens are stored in Git!**
+
+### Environment Variables (Optional)
+
+You can also use environment variables via `.env` file:
+
+```env
+# Optional - UI settings take priority
+HA_URL=http://192.168.1.100:8123
+HA_TOKEN=your_token
+GOOGLE_AI_KEY=AIza...
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+## 📦 Tech Stack
+
+- **Frontend**: Streamlit with custom Apple-style CSS
+- **AI**: Google Gemini Flash + Anthropic Claude
+- **Database**: InfluxDB v2
+- **Container**: Docker Compose
+
+## 🔄 Updates
+
+Updates can be pulled directly from the Settings page in the app, or manually:
 
 ```bash
-docker-compose up -d
+cd /path/to/smarthome-ai-center
+git pull
+docker compose up -d --build
 ```
 
-### 4. Web-Interface öffnen
-
-Öffne im Browser: `http://<deine-ip>:8501`
-
-## Struktur
+## 📁 Directory Structure
 
 ```
 smarthome-ai-center/
-├── docker-compose.yml    # Container-Orchestrierung
-├── .env.example          # Template für Konfiguration
-├── .env                  # Deine lokale Konfiguration (nicht committen!)
 ├── app/
-│   ├── Dockerfile        # Python/Streamlit Container
-│   ├── requirements.txt  # Python Dependencies
-│   └── main.py           # Hauptanwendung (wird erweitert)
-└── data/
-    └── exports/          # Generierte Dateien (Downloads)
+│   ├── main.py          # Main Streamlit application
+│   ├── Dockerfile       # Container definition
+│   └── requirements.txt # Python dependencies
+├── config/              # Local settings (gitignored)
+│   └── settings.json    # API keys, URLs, etc.
+├── data/                # Exports and generated files
+├── docker-compose.yml   # Service definitions
+└── README.md
 ```
 
-## Ports
+## 🤖 AI Models Used
 
-| Service    | Port | Beschreibung |
-|------------|------|--------------|
-| App (Streamlit) | 8501 | Web-Interface |
-| InfluxDB   | 8086 | Datenbank (optional extern) |
+| Feature | Model | Cost |
+|---------|-------|------|
+| Bug-Hunter | Gemini Flash | ~0.001€/analysis |
+| Analyst | Gemini or Claude | ~0.001€ or ~0.02€ |
+| Architect | Claude | ~0.02€/generation |
 
-## Troubleshooting
+## 📄 License
 
-### Container starten nicht
-```bash
-docker-compose logs -f
-```
-
-### InfluxDB Verbindungsprobleme
-Prüfe ob der Container läuft:
-```bash
-docker ps | grep influxdb
-```
-
-### Home Assistant nicht erreichbar
-- Prüfe `HA_URL` in `.env`
-- Prüfe ob Token gültig ist
-- Prüfe Netzwerk zwischen Docker und HA
-
-## Entwicklung
-
-Für lokale Entwicklung ohne Docker:
-
-```bash
-cd app
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-streamlit run main.py
-```
-
-## Lizenz
-
-MIT
+MIT License - feel free to use and modify!
 
 ---
 
-*Powered by Claude AI & Home Assistant*
+Made with ❤️ for the Home Assistant community

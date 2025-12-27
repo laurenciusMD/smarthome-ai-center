@@ -1,138 +1,420 @@
 """
-Smart Home AI Center - Main Application
-=======================================
+Smart Home AI Center v0.3.0
+===========================
 AI-powered maintenance system for Home Assistant
+Apple-inspired clean design with built-in settings management
 """
 
 import streamlit as st
 import os
 import requests
 import json
+import subprocess
 from datetime import datetime, timedelta
+from pathlib import Path
 from anthropic import Anthropic
 import google.generativeai as genai
-import random
+
+# ============================================
+# CONFIG & CONSTANTS
+# ============================================
+APP_VERSION = "0.3.0"
+CONFIG_FILE = Path("/config/settings.json")
+CONFIG_DIR = Path("/config")
 
 # ============================================
 # PAGE CONFIG
 # ============================================
 st.set_page_config(
-    page_title="Smart Home AI Center",
+    page_title="AI Center",
     page_icon="🏠",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # ============================================
-# CUSTOM CSS
+# APPLE-STYLE CSS
 # ============================================
 st.markdown("""
 <style>
-    /* Dark theme improvements */
+    /* Import SF Pro-like font */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    /* Global styles - Light Apple theme */
     .stApp {
-        background-color: #0e1117;
+        background: linear-gradient(180deg, #f5f5f7 0%, #ffffff 100%);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     
-    /* Card styling */
-    .metric-card {
-        background: linear-gradient(135deg, #1a1f2e 0%, #151922 100%);
-        border: 1px solid #2d3748;
-        border-radius: 12px;
-        padding: 20px;
-        margin: 10px 0;
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Main content area */
+    .main .block-container {
+        padding: 2rem 3rem;
+        max-width: 1400px;
     }
     
-    .metric-card h3 {
-        color: #63b3ed;
-        margin: 0 0 10px 0;
-        font-size: 14px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
+    /* Sidebar - Apple style */
+    section[data-testid="stSidebar"] {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(20px);
+        border-right: 1px solid rgba(0, 0, 0, 0.1);
     }
     
-    .metric-card .value {
-        color: #fff;
-        font-size: 32px;
-        font-weight: bold;
+    section[data-testid="stSidebar"] .block-container {
+        padding-top: 2rem;
     }
     
-    /* Status badges */
-    .status-ok { color: #48bb78; }
-    .status-warn { color: #ecc94b; }
-    .status-error { color: #fc8181; }
-    
-    /* Error list styling */
-    .error-item {
-        background: #1a1f2e;
-        border-left: 4px solid #fc8181;
-        padding: 15px;
-        margin: 10px 0;
-        border-radius: 0 8px 8px 0;
+    /* Typography */
+    h1 {
+        font-weight: 600 !important;
+        font-size: 2.5rem !important;
+        color: #1d1d1f !important;
+        letter-spacing: -0.02em;
     }
     
-    .error-item.warning {
-        border-left-color: #ecc94b;
+    h2, h3 {
+        font-weight: 600 !important;
+        color: #1d1d1f !important;
+        letter-spacing: -0.01em;
     }
     
-    .error-item.info {
-        border-left-color: #63b3ed;
+    p, li, span {
+        color: #424245;
+        line-height: 1.6;
     }
     
-    /* Sidebar styling */
-    .css-1d391kg {
-        background-color: #151922;
+    /* Apple-style cards */
+    .apple-card {
+        background: white;
+        border-radius: 18px;
+        padding: 24px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        border: 1px solid rgba(0, 0, 0, 0.04);
+        margin-bottom: 16px;
+        transition: all 0.3s ease;
     }
     
-    /* Button improvements */
-    .stButton > button {
-        background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
-        border: none;
-        border-radius: 8px;
-        padding: 10px 20px;
+    .apple-card:hover {
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+        transform: translateY(-2px);
+    }
+    
+    /* Metric cards */
+    .metric-container {
+        background: white;
+        border-radius: 16px;
+        padding: 20px 24px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        text-align: center;
+        border: 1px solid rgba(0, 0, 0, 0.04);
+    }
+    
+    .metric-value {
+        font-size: 42px;
         font-weight: 600;
+        color: #1d1d1f;
+        line-height: 1.1;
+    }
+    
+    .metric-label {
+        font-size: 13px;
+        color: #86868b;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 8px;
+    }
+    
+    /* Status indicators */
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 8px;
+    }
+    
+    .status-online { background: #34c759; }
+    .status-offline { background: #ff3b30; }
+    .status-warning { background: #ff9500; }
+    
+    /* Buttons - Apple style */
+    .stButton > button {
+        background: #007aff !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 12px !important;
+        padding: 12px 24px !important;
+        font-weight: 500 !important;
+        font-size: 15px !important;
+        transition: all 0.2s ease !important;
+        box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3) !important;
     }
     
     .stButton > button:hover {
-        background: linear-gradient(135deg, #63b3ed 0%, #4299e1 100%);
+        background: #0056b3 !important;
+        transform: scale(1.02);
+        box-shadow: 0 4px 12px rgba(0, 122, 255, 0.4) !important;
+    }
+    
+    /* Input fields */
+    .stTextInput > div > div > input,
+    .stTextArea > div > div > textarea,
+    .stSelectbox > div > div > div {
+        border-radius: 10px !important;
+        border: 1px solid #d2d2d7 !important;
+        padding: 12px 16px !important;
+        font-size: 15px !important;
+        background: white !important;
+    }
+    
+    .stTextInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus {
+        border-color: #007aff !important;
+        box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2) !important;
+    }
+    
+    /* Expander */
+    .streamlit-expanderHeader {
+        background: white !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(0, 0, 0, 0.06) !important;
+        font-weight: 500 !important;
+    }
+    
+    /* Success/Error/Warning messages */
+    .stSuccess > div {
+        background: rgba(52, 199, 89, 0.1) !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(52, 199, 89, 0.2) !important;
+        color: #248a3d !important;
+    }
+    
+    .stError > div {
+        background: rgba(255, 59, 48, 0.1) !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(255, 59, 48, 0.2) !important;
+        color: #d70015 !important;
+    }
+    
+    .stWarning > div {
+        background: rgba(255, 149, 0, 0.1) !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(255, 149, 0, 0.2) !important;
+        color: #c93400 !important;
+    }
+    
+    .stInfo > div {
+        background: rgba(0, 122, 255, 0.1) !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(0, 122, 255, 0.2) !important;
+        color: #0056b3 !important;
+    }
+    
+    /* Code blocks */
+    .stCodeBlock {
+        border-radius: 12px !important;
+        border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    }
+    
+    /* Divider */
+    hr {
+        border: none;
+        height: 1px;
+        background: rgba(0, 0, 0, 0.08);
+        margin: 24px 0;
+    }
+    
+    /* Logo styling */
+    .app-logo {
+        font-size: 24px;
+        font-weight: 600;
+        color: #1d1d1f;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    /* Version badge */
+    .version-badge {
+        background: #f5f5f7;
+        color: #86868b;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 500;
+    }
+    
+    /* Connection status */
+    .connection-status {
+        display: flex;
+        align-items: center;
+        padding: 10px 14px;
+        border-radius: 10px;
+        margin: 12px 0;
+        font-size: 13px;
+        font-weight: 500;
+    }
+    
+    .connection-online {
+        background: rgba(52, 199, 89, 0.15);
+        color: #248a3d;
+    }
+    
+    .connection-offline {
+        background: rgba(255, 59, 48, 0.15);
+        color: #d70015;
+    }
+    
+    /* Radio buttons as pills */
+    .stRadio > div {
+        gap: 8px;
+    }
+    
+    .stRadio > div > label {
+        background: white;
+        border: 1px solid #d2d2d7;
+        border-radius: 10px;
+        padding: 10px 16px;
+        margin: 2px 0;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .stRadio > div > label:hover {
+        border-color: #007aff;
+        background: rgba(0, 122, 255, 0.05);
+    }
+    
+    .stRadio > div > label[data-checked="true"] {
+        background: #007aff;
+        border-color: #007aff;
+        color: white;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================
-# SESSION STATE INIT
+# SETTINGS MANAGEMENT
 # ============================================
+
+def load_settings():
+    """Load settings from config file."""
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            pass
+    return {
+        "ha_url": "",
+        "ha_token": "",
+        "anthropic_key": "",
+        "google_ai_key": "",
+        "github_repo": "laurenciusMD/smarthome-ai-center",
+        "theme": "light"
+    }
+
+def save_settings(settings):
+    """Save settings to config file."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(settings, f, indent=2)
+
+def get_setting(key, default=""):
+    """Get a setting value."""
+    settings = load_settings()
+    # First check environment variables (for Docker compatibility)
+    env_map = {
+        "ha_url": "HA_URL",
+        "ha_token": "HA_TOKEN", 
+        "anthropic_key": "ANTHROPIC_API_KEY",
+        "google_ai_key": "GOOGLE_AI_KEY"
+    }
+    if key in env_map:
+        env_val = os.getenv(env_map[key], "")
+        if env_val:
+            return env_val
+    return settings.get(key, default)
+
+# ============================================
+# SESSION STATE
+# ============================================
+if 'settings' not in st.session_state:
+    st.session_state.settings = load_settings()
 if 'ha_cache' not in st.session_state:
     st.session_state.ha_cache = None
 if 'ha_cache_time' not in st.session_state:
     st.session_state.ha_cache_time = None
 if 'error_logs' not in st.session_state:
     st.session_state.error_logs = []
-if 'last_analysis' not in st.session_state:
-    st.session_state.last_analysis = None
 if 'analysis_results' not in st.session_state:
-    st.session_state.analysis_results = []
+    st.session_state.analysis_results = None
 
 # ============================================
-# HELPER FUNCTIONS
+# API FUNCTIONS
 # ============================================
 
-def get_ha_url():
-    return os.getenv("HA_URL", "").rstrip("/")
+def check_ha_connection():
+    """Test Home Assistant connection."""
+    url = get_setting("ha_url", "").rstrip("/")
+    token = get_setting("ha_token", "")
+    if not url or not token:
+        return False, "Nicht konfiguriert"
+    try:
+        resp = requests.get(
+            f"{url}/api/",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10
+        )
+        if resp.status_code == 200:
+            return True, "Verbunden"
+        return False, f"HTTP {resp.status_code}"
+    except:
+        return False, "Keine Verbindung"
 
-def get_ha_token():
-    return os.getenv("HA_TOKEN", "")
+def get_ha_states():
+    """Get all entity states from Home Assistant."""
+    url = get_setting("ha_url", "").rstrip("/")
+    token = get_setting("ha_token", "")
+    try:
+        resp = requests.get(
+            f"{url}/api/states",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=30
+        )
+        if resp.status_code == 200:
+            return resp.json()
+        return []
+    except:
+        return []
 
-def get_anthropic_key():
-    return os.getenv("ANTHROPIC_API_KEY", "")
-
-def get_google_ai_key():
-    return os.getenv("GOOGLE_AI_KEY", "")
+def get_ha_errors():
+    """Get errors from Home Assistant (unavailable entities)."""
+    states = get_ha_states()
+    errors = []
+    for entity in states:
+        state = entity.get('state', '')
+        if state == 'unavailable':
+            eid = entity.get('entity_id', '')
+            name = entity.get('attributes', {}).get('friendly_name', eid)
+            errors.append({
+                'level': 'error',
+                'message': f"Entity nicht verfügbar: {name}",
+                'entity_id': eid,
+                'details': []
+            })
+    return errors
 
 def ask_gemini(prompt: str) -> str:
-    """Ask Gemini Flash for quick analysis (cheaper than Claude)."""
-    api_key = get_google_ai_key()
+    """Ask Gemini Flash for quick analysis."""
+    api_key = get_setting("google_ai_key", "")
     if not api_key:
-        return "❌ Google AI Key nicht konfiguriert (GOOGLE_AI_KEY in .env)"
+        return "❌ Google AI Key nicht konfiguriert. Gehe zu Einstellungen."
     try:
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel('gemini-2.0-flash-exp')
@@ -142,10 +424,10 @@ def ask_gemini(prompt: str) -> str:
         return f"❌ Gemini Fehler: {str(e)}"
 
 def ask_claude(prompt: str) -> str:
-    """Ask Claude for complex analysis (better quality)."""
-    api_key = get_anthropic_key()
+    """Ask Claude for complex analysis."""
+    api_key = get_setting("anthropic_key", "")
     if not api_key:
-        return "❌ Anthropic API Key nicht konfiguriert"
+        return "❌ Anthropic API Key nicht konfiguriert. Gehe zu Einstellungen."
     try:
         client = Anthropic(api_key=api_key)
         response = client.messages.create(
@@ -157,280 +439,139 @@ def ask_claude(prompt: str) -> str:
     except Exception as e:
         return f"❌ Claude Fehler: {str(e)}"
 
-def check_ha_connection():
-    """Test Home Assistant connection."""
-    url = get_ha_url()
-    token = get_ha_token()
-    if not url or not token:
-        return False, "URL oder Token fehlt"
+def git_pull_updates():
+    """Pull latest updates from GitHub."""
     try:
-        resp = requests.get(
-            f"{url}/api/",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=10
+        result = subprocess.run(
+            ["git", "pull", "origin", "main"],
+            cwd="/app",
+            capture_output=True,
+            text=True,
+            timeout=60
         )
-        if resp.status_code == 200:
-            return True, resp.json().get("message", "OK")
-        return False, f"HTTP {resp.status_code}"
-    except requests.exceptions.ConnectionError:
-        return False, "Verbindung fehlgeschlagen"
+        return result.returncode == 0, result.stdout + result.stderr
     except Exception as e:
         return False, str(e)
 
-def get_ha_states():
-    """Get all entity states from Home Assistant."""
-    url = get_ha_url()
-    token = get_ha_token()
+def get_git_status():
+    """Get current git status."""
     try:
-        resp = requests.get(
-            f"{url}/api/states",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=30
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%h - %s (%cr)"],
+            cwd="/app",
+            capture_output=True,
+            text=True,
+            timeout=10
         )
-        if resp.status_code == 200:
-            return resp.json()
-        return []
+        return result.stdout.strip() if result.returncode == 0 else "Unbekannt"
     except:
-        return []
-
-def get_ha_error_log():
-    """Get error log from Home Assistant via system_log service."""
-    url = get_ha_url()
-    token = get_ha_token()
-    
-    # Try multiple endpoints
-    errors_found = []
-    
-    # Method 1: Try getting persistent notifications (often contain errors)
-    try:
-        resp = requests.get(
-            f"{url}/api/states",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=30
-        )
-        if resp.status_code == 200:
-            states = resp.json()
-            for entity in states:
-                eid = entity.get('entity_id', '')
-                state = entity.get('state', '')
-                attrs = entity.get('attributes', {})
-                
-                # Collect unavailable entities as errors
-                if state == 'unavailable':
-                    errors_found.append(f"ERROR: Entity {eid} is unavailable - {attrs.get('friendly_name', eid)}")
-                
-                # Collect persistent notifications
-                if eid.startswith('persistent_notification.'):
-                    msg = attrs.get('message', '')
-                    if msg:
-                        errors_found.append(f"WARNING: Notification - {msg[:200]}")
-    except:
-        pass
-    
-    # Method 2: Check for automations that failed
-    try:
-        resp = requests.get(
-            f"{url}/api/logbook",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=30
-        )
-        if resp.status_code == 200:
-            logbook = resp.json()
-            for entry in logbook[-100:]:  # Last 100 entries
-                msg = entry.get('message', '')
-                name = entry.get('name', '')
-                if 'error' in msg.lower() or 'failed' in msg.lower():
-                    errors_found.append(f"ERROR: {name} - {msg}")
-    except:
-        pass
-    
-    return '\n'.join(errors_found)
-
-def get_ha_services():
-    """Get available services from Home Assistant."""
-    url = get_ha_url()
-    token = get_ha_token()
-    try:
-        resp = requests.get(
-            f"{url}/api/services",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=30
-        )
-        if resp.status_code == 200:
-            return resp.json()
-        return []
-    except:
-        return []
-
-def parse_error_log(log_text):
-    """Parse error log into structured entries."""
-    errors = []
-    
-    for line in log_text.split('\n'):
-        line = line.strip()
-        if not line:
-            continue
-        
-        # Determine level
-        if line.startswith('ERROR:'):
-            level = 'error'
-            message = line[6:].strip()
-        elif line.startswith('WARNING:'):
-            level = 'warning'
-            message = line[8:].strip()
-        else:
-            continue
-        
-        errors.append({
-            'level': level,
-            'message': message,
-            'details': [],
-            'timestamp': datetime.now().isoformat()
-        })
-    
-    return errors
-
-def call_claude(prompt, system_prompt="Du bist ein Home Assistant Experte."):
-    """Call Claude API for analysis."""
-    api_key = get_anthropic_key()
-    if not api_key:
-        return "Fehler: ANTHROPIC_API_KEY nicht gesetzt"
-    
-    try:
-        client = Anthropic(api_key=api_key)
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=4096,
-            system=system_prompt,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return message.content[0].text
-    except Exception as e:
-        return f"Fehler bei Claude API: {str(e)}"
-
-def get_smart_tip():
-    """Get a smart tip for Home Assistant optimization."""
-    tips = [
-        "💡 **Tipp:** Gruppiere Lichter in Räumen, um sie gemeinsam zu steuern und Automationen zu vereinfachen.",
-        "🔋 **Tipp:** Nutze `device_tracker` mit `consider_home` um häufiges Umschalten bei instabiler Verbindung zu vermeiden.",
-        "⚡ **Tipp:** Verwende `trigger_variables` in Automationen für dynamischere und wiederverwendbare Trigger.",
-        "🌡️ **Tipp:** Setze `window_seconds` bei Template-Sensoren, um Sensorwerte zu glätten.",
-        "📊 **Tipp:** Nutze den `statistics` Sensor für Langzeitanalysen von Sensorwerten.",
-        "🔒 **Tipp:** Aktiviere 2FA und nutze `trusted_networks` statt offene Zugänge.",
-        "⏰ **Tipp:** Verwende `time_pattern` Trigger statt vieler einzelner `at` Trigger.",
-        "🎯 **Tipp:** Nutze `choose` in Automationen statt mehrerer ähnlicher Automationen.",
-        "💾 **Tipp:** Setze `recorder.purge_keep_days` auf 5-7 Tage um die Datenbank klein zu halten.",
-        "🔄 **Tipp:** Nutze `reload_config_entry` Service um Integrationen neu zu laden ohne Neustart."
-    ]
-    return random.choice(tips)
-
-def refresh_ha_data():
-    """Refresh all Home Assistant data."""
-    st.session_state.ha_cache = get_ha_states()
-    st.session_state.ha_cache_time = datetime.now()
-    st.session_state.error_logs = parse_error_log(get_ha_error_log())
+        return "Git nicht verfügbar"
 
 # ============================================
-# SIDEBAR NAVIGATION
+# SIDEBAR
 # ============================================
 with st.sidebar:
-    st.title("🏠 AI Center")
+    # Logo
+    st.markdown(f"""
+        <div class="app-logo">
+            🏠 AI Center
+            <span class="version-badge">v{APP_VERSION}</span>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Connection Status
+    connected, status_msg = check_ha_connection()
+    if connected:
+        st.markdown("""
+            <div class="connection-status connection-online">
+                <span class="status-dot status-online"></span>
+                Home Assistant verbunden
+            </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+            <div class="connection-status connection-offline">
+                <span class="status-dot status-offline"></span>
+                {status_msg}
+            </div>
+        """, unsafe_allow_html=True)
+    
     st.markdown("---")
     
     # Navigation
     page = st.radio(
         "Navigation",
-        ["📊 Dashboard", "🔍 Bug-Hunter", "📈 48h Analyst", "🏗️ Architect"],
+        ["🏠 Dashboard", "🔍 Bug-Hunter", "📈 Analyst", "🏗️ Architect", "⚙️ Einstellungen"],
         label_visibility="collapsed"
     )
-    
-    st.markdown("---")
-    
-    # Connection Status
-    ha_ok, ha_msg = check_ha_connection()
-    if ha_ok:
-        st.success(f"✅ HA verbunden")
-    else:
-        st.error(f"❌ HA: {ha_msg}")
-    
-    # Cache info
-    if st.session_state.ha_cache_time:
-        cache_age = (datetime.now() - st.session_state.ha_cache_time).seconds
-        st.caption(f"Cache: {cache_age}s alt")
-    
-    st.markdown("---")
-    st.caption("v0.2.0 | Made with ❤️")
 
 # ============================================
 # PAGE: DASHBOARD
 # ============================================
-if page == "📊 Dashboard":
-    st.title("📊 Dashboard")
+if page == "🏠 Dashboard":
+    st.title("Dashboard")
     st.markdown("Übersicht über dein Smart Home System")
     
-    # Refresh Button
-    col_refresh, col_spacer = st.columns([1, 4])
-    with col_refresh:
-        if st.button("🔄 Daten aktualisieren", use_container_width=True):
-            with st.spinner("Lade Daten von Home Assistant..."):
-                refresh_ha_data()
-            st.success("Daten aktualisiert!")
+    # Refresh button
+    col1, col2, col3 = st.columns([1, 1, 4])
+    with col1:
+        if st.button("🔄 Aktualisieren"):
+            st.session_state.ha_cache = None
             st.rerun()
     
-    st.markdown("---")
+    # Get data
+    entities = get_ha_states()
+    errors = get_ha_errors()
     
-    # Metrics Row
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Metrics row
     col1, col2, col3, col4 = st.columns(4)
     
-    entities = st.session_state.ha_cache or []
-    error_count = len(st.session_state.error_logs)
-    
     with col1:
-        st.metric(
-            label="📱 Entitäten",
-            value=len(entities),
-            delta=None
-        )
+        st.markdown(f"""
+            <div class="metric-container">
+                <div class="metric-value">{len(entities)}</div>
+                <div class="metric-label">Entitäten</div>
+            </div>
+        """, unsafe_allow_html=True)
     
     with col2:
         unavailable = len([e for e in entities if e.get('state') == 'unavailable'])
-        st.metric(
-            label="⚠️ Nicht verfügbar",
-            value=unavailable,
-            delta=None,
-            delta_color="inverse"
-        )
+        st.markdown(f"""
+            <div class="metric-container">
+                <div class="metric-value" style="color: {'#ff3b30' if unavailable > 0 else '#34c759'}">{unavailable}</div>
+                <div class="metric-label">Nicht verfügbar</div>
+            </div>
+        """, unsafe_allow_html=True)
     
     with col3:
-        st.metric(
-            label="🐛 Fehler im Log",
-            value=error_count,
-            delta=None,
-            delta_color="inverse"
-        )
+        lights_on = len([e for e in entities if e.get('entity_id', '').startswith('light.') and e.get('state') == 'on'])
+        st.markdown(f"""
+            <div class="metric-container">
+                <div class="metric-value" style="color: #ff9500">{lights_on}</div>
+                <div class="metric-label">Lichter an</div>
+            </div>
+        """, unsafe_allow_html=True)
     
     with col4:
-        lights_on = len([e for e in entities if e.get('entity_id', '').startswith('light.') and e.get('state') == 'on'])
-        st.metric(
-            label="💡 Lichter an",
-            value=lights_on
-        )
+        automations = len([e for e in entities if e.get('entity_id', '').startswith('automation.')])
+        st.markdown(f"""
+            <div class="metric-container">
+                <div class="metric-value">{automations}</div>
+                <div class="metric-label">Automationen</div>
+            </div>
+        """, unsafe_allow_html=True)
     
-    st.markdown("---")
+    st.markdown("<br>", unsafe_allow_html=True)
     
-    # Two column layout
+    # Two columns
     col_left, col_right = st.columns(2)
     
     with col_left:
-        st.subheader("🕐 Zuletzt analysiert")
-        if st.session_state.last_analysis:
-            st.info(f"Letzte Analyse: {st.session_state.last_analysis}")
-        else:
-            st.info("Noch keine Analyse durchgeführt")
+        st.markdown("""<div class="apple-card">""", unsafe_allow_html=True)
+        st.subheader("📊 Entitäten nach Domain")
         
-        st.subheader("📋 Schnellstatus")
-        
-        # Entity breakdown
         if entities:
             domains = {}
             for e in entities:
@@ -439,307 +580,294 @@ if page == "📊 Dashboard":
             
             sorted_domains = sorted(domains.items(), key=lambda x: x[1], reverse=True)[:8]
             for domain, count in sorted_domains:
-                st.write(f"**{domain}**: {count}")
+                st.markdown(f"**{domain}** · {count}")
+        st.markdown("</div>", unsafe_allow_html=True)
     
     with col_right:
-        st.subheader("💡 Smart Tipp des Tages")
-        st.markdown(get_smart_tip())
+        st.markdown("""<div class="apple-card">""", unsafe_allow_html=True)
+        st.subheader("⚠️ Probleme")
         
-        st.subheader("🚨 Letzte Fehler")
-        if st.session_state.error_logs:
-            for err in st.session_state.error_logs[:3]:
-                level_icon = "🔴" if err['level'] == 'error' else "🟡"
-                st.markdown(f"{level_icon} {err['message'][:100]}...")
+        if errors:
+            for err in errors[:5]:
+                st.markdown(f"🔴 {err['message'][:60]}...")
+            if len(errors) > 5:
+                st.markdown(f"*... und {len(errors) - 5} weitere*")
         else:
-            st.success("Keine Fehler im Log!")
+            st.success("✅ Keine Probleme erkannt!")
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================================
 # PAGE: BUG-HUNTER
 # ============================================
 elif page == "🔍 Bug-Hunter":
-    st.title("🔍 Bug-Hunter")
-    st.markdown("Analysiere und behebe Fehler in deinem Home Assistant")
+    st.title("Bug-Hunter")
+    st.markdown("Finde und behebe Probleme in deinem System")
     
-    # Refresh logs
     col1, col2 = st.columns([1, 4])
     with col1:
-        if st.button("🔄 Logs laden", use_container_width=True):
-            with st.spinner("Lade Fehler-Logs..."):
-                log_text = get_ha_error_log()
-                st.session_state.error_logs = parse_error_log(log_text)
-            st.success(f"{len(st.session_state.error_logs)} Einträge geladen")
+        if st.button("🔄 Probleme laden"):
+            st.session_state.error_logs = get_ha_errors()
             st.rerun()
     
-    st.markdown("---")
-    
-    # Filter
-    filter_level = st.selectbox(
-        "Filter nach Level",
-        ["Alle", "Nur Fehler", "Nur Warnungen"]
-    )
-    
     errors = st.session_state.error_logs
-    if filter_level == "Nur Fehler":
-        errors = [e for e in errors if e['level'] == 'error']
-    elif filter_level == "Nur Warnungen":
-        errors = [e for e in errors if e['level'] == 'warning']
     
-    st.markdown(f"**{len(errors)} Einträge gefunden**")
+    st.markdown(f"**{len(errors)} Probleme gefunden**")
     st.markdown("---")
     
-    # Error list
     if not errors:
-        st.success("🎉 Keine Fehler gefunden! Dein System läuft sauber.")
+        st.success("🎉 Keine Probleme gefunden! Dein System läuft einwandfrei.")
     else:
-        for i, err in enumerate(errors):
-            level_color = "🔴" if err['level'] == 'error' else "🟡"
-            
-            with st.expander(f"{level_color} {err['message'][:80]}...", expanded=False):
-                st.code(err['message'], language=None)
+        for i, err in enumerate(errors[:20]):  # Limit to 20
+            with st.expander(f"🔴 {err['message'][:70]}...", expanded=False):
+                st.markdown(f"**Entity ID:** `{err.get('entity_id', 'N/A')}`")
                 
-                if err['details']:
-                    st.markdown("**Details:**")
-                    st.code('\n'.join(err['details'][:10]), language=None)
-                
-                # AI Analysis button - using Gemini (cheaper & faster)
-                if st.button(f"🤖 Mit AI analysieren (Gemini)", key=f"analyze_{i}"):
-                    with st.spinner("Gemini analysiert den Fehler..."):
-                        prompt = f"""Du bist ein Home Assistant Experte. Analysiere diesen Fehler und gib eine Lösung:
+                if st.button(f"🤖 Mit Gemini analysieren", key=f"analyze_{i}"):
+                    with st.spinner("Analysiere..."):
+                        prompt = f"""Du bist ein Home Assistant Experte. Analysiere dieses Problem:
 
-FEHLER:
-{err['message']}
+PROBLEM: {err['message']}
+ENTITY: {err.get('entity_id', 'N/A')}
 
-DETAILS:
-{chr(10).join(err['details'][:20]) if err['details'] else 'Keine Details'}
-
-Antworte auf Deutsch mit:
-1. Was ist das Problem?
-2. Was ist die Ursache?
-3. Wie kann man es beheben? (mit konkretem YAML Code falls relevant)
-
-Halte dich kurz und präzise.
+Antworte auf Deutsch, kurz und präzise:
+1. Mögliche Ursache
+2. Lösungsvorschlag
 """
                         solution = ask_gemini(prompt)
-                    
-                    st.markdown("### 🤖 AI Analyse")
+                    st.markdown("### Analyse")
                     st.markdown(solution)
-                    
-                    # Download button for solution
-                    st.download_button(
-                        label="💾 Lösung als Datei speichern",
-                        data=solution,
-                        file_name=f"fix_{i}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
-                        mime="text/markdown"
-                    )
 
 # ============================================
-# PAGE: 48H ANALYST
+# PAGE: ANALYST
 # ============================================
-elif page == "📈 48h Analyst":
-    st.title("📈 48h Analyst")
-    st.markdown("Analysiere Sensor-Daten der letzten 48 Stunden auf Ineffizienzen")
+elif page == "📈 Analyst":
+    st.title("System Analyst")
+    st.markdown("Analysiere dein Smart Home auf Optimierungspotential")
     
     # Model selection
-    col1, col2 = st.columns([2, 3])
+    col1, col2 = st.columns([1, 2])
     with col1:
-        ai_model = st.selectbox(
-            "🤖 AI Modell wählen",
-            ["Gemini Flash (günstig)", "Claude (besser)"],
-            help="Gemini ist ~10x günstiger, Claude liefert tiefere Analysen"
+        model = st.selectbox(
+            "AI Modell",
+            ["Gemini Flash (günstig)", "Claude (präziser)"]
         )
     
     with col2:
-        if "Gemini" in ai_model:
-            st.info("💰 Gemini Flash: ~0.001€ pro Analyse")
+        if "Gemini" in model:
+            st.info("💰 Gemini: ~0.001€ pro Analyse")
         else:
-            st.warning("💎 Claude: ~0.02€ pro Analyse (bessere Qualität)")
+            st.warning("💎 Claude: ~0.02€ pro Analyse")
     
-    st.markdown("---")
-    
-    # Analysis trigger
-    if st.button("🚀 Analyse starten", type="primary", use_container_width=False):
-        with st.spinner("Sammle Daten und analysiere mit AI..."):
-            # Get current states
+    if st.button("🚀 Analyse starten", type="primary"):
+        with st.spinner("Analysiere System..."):
             states = get_ha_states()
             
-            # Prepare data summary
-            summary_data = {
-                'lights': [],
-                'climate': [],
-                'sensors': [],
-                'binary_sensors': [],
-                'switches': []
+            # Build summary
+            summary = {
+                'total': len(states),
+                'unavailable': len([e for e in states if e.get('state') == 'unavailable']),
+                'lights_on': len([e for e in states if e.get('entity_id', '').startswith('light.') and e.get('state') == 'on']),
+                'domains': {}
             }
             
-            for entity in states:
-                eid = entity.get('entity_id', '')
-                state = entity.get('state', '')
-                attrs = entity.get('attributes', {})
-                
-                if eid.startswith('light.'):
-                    summary_data['lights'].append({
-                        'id': eid,
-                        'state': state,
-                        'brightness': attrs.get('brightness', 'N/A')
-                    })
-                elif eid.startswith('climate.'):
-                    summary_data['climate'].append({
-                        'id': eid,
-                        'state': state,
-                        'current_temp': attrs.get('current_temperature'),
-                        'target_temp': attrs.get('temperature'),
-                        'hvac_action': attrs.get('hvac_action')
-                    })
-                elif eid.startswith('sensor.') and 'temperature' in eid.lower():
-                    summary_data['sensors'].append({
-                        'id': eid,
-                        'state': state,
-                        'unit': attrs.get('unit_of_measurement', '')
-                    })
-                elif eid.startswith('binary_sensor.') and ('window' in eid.lower() or 'door' in eid.lower()):
-                    summary_data['binary_sensors'].append({
-                        'id': eid,
-                        'state': state
-                    })
+            for e in states:
+                domain = e.get('entity_id', '').split('.')[0]
+                summary['domains'][domain] = summary['domains'].get(domain, 0) + 1
             
-            # Build prompt
-            prompt = f"""Analysiere diese Home Assistant Daten auf Ineffizienzen und Optimierungspotential.
+            prompt = f"""Analysiere dieses Smart Home System und gib Optimierungsvorschläge:
 
-AKTUELLE ZEIT: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+ÜBERSICHT:
+- Gesamt Entitäten: {summary['total']}
+- Nicht verfügbar: {summary['unavailable']}
+- Lichter an: {summary['lights_on']}
 
-LICHTER ({len(summary_data['lights'])} Stück):
-{json.dumps(summary_data['lights'][:20], indent=2)}
+DOMAINS:
+{json.dumps(summary['domains'], indent=2)}
 
-KLIMAGERÄTE ({len(summary_data['climate'])} Stück):
-{json.dumps(summary_data['climate'], indent=2)}
-
-TEMPERATUR-SENSOREN:
-{json.dumps(summary_data['sensors'][:15], indent=2)}
-
-FENSTER/TÜR-SENSOREN:
-{json.dumps(summary_data['binary_sensors'][:15], indent=2)}
-
-Gib mir MAXIMAL 20 konkrete Verbesserungsvorschläge auf Deutsch. Fokussiere auf:
-1. Energieverschwendung (Lichter an wenn nicht nötig, Heizung bei offenem Fenster)
-2. Automations-Konflikte
-3. Fehlende Automationen die Sinn machen würden
-4. Sensor-Anomalien
-
-Format: Nummerierte Liste mit kurzer Erklärung und konkreter Handlungsempfehlung.
+Gib 5-10 konkrete Verbesserungsvorschläge auf Deutsch.
+Fokus auf: Energieeffizienz, Automatisierung, Problemlösung.
 """
             
-            # Use selected AI model
-            if "Gemini" in ai_model:
-                analysis = ask_gemini(prompt)
+            if "Gemini" in model:
+                result = ask_gemini(prompt)
             else:
-                analysis = ask_claude(prompt)
+                result = ask_claude(prompt)
             
-            st.session_state.analysis_results = analysis
-            st.session_state.last_analysis = datetime.now().strftime('%Y-%m-%d %H:%M')
+            st.session_state.analysis_results = result
     
-    # Show results
     if st.session_state.analysis_results:
         st.markdown("---")
-        st.subheader("📋 Analyse-Ergebnisse")
+        st.subheader("📋 Ergebnisse")
         st.markdown(st.session_state.analysis_results)
-        
-        # Download
-        st.download_button(
-            label="💾 Analyse speichern",
-            data=st.session_state.analysis_results,
-            file_name=f"analyse_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
-            mime="text/markdown"
-        )
 
 # ============================================
 # PAGE: ARCHITECT
 # ============================================
 elif page == "🏗️ Architect":
-    st.title("🏗️ Architect")
-    st.markdown("Erstelle Custom Automations mit AI-Unterstützung")
-    
-    st.markdown("---")
+    st.title("Automation Architect")
+    st.markdown("Erstelle neue Automationen mit AI-Unterstützung")
     
     # Load entities for context
-    if st.button("📥 Entitäten laden"):
-        with st.spinner("Lade Entitäten..."):
-            st.session_state.ha_cache = get_ha_states()
-        st.success(f"{len(st.session_state.ha_cache)} Entitäten geladen")
+    entities = get_ha_states()
+    entity_ids = [e.get('entity_id', '') for e in entities][:100]  # First 100
     
-    # Show available entities
-    entities = st.session_state.ha_cache or []
-    if entities:
-        with st.expander("📋 Verfügbare Entitäten anzeigen"):
-            domains = {}
-            for e in entities:
-                domain = e.get('entity_id', '').split('.')[0]
-                if domain not in domains:
-                    domains[domain] = []
-                domains[domain].append(e.get('entity_id'))
-            
-            for domain in sorted(domains.keys()):
-                st.markdown(f"**{domain}** ({len(domains[domain])})")
-                st.code(', '.join(sorted(domains[domain])[:20]))
+    st.markdown("""<div class="apple-card">""", unsafe_allow_html=True)
     
-    st.markdown("---")
-    
-    # User request
-    st.subheader("💭 Was möchtest du automatisieren?")
-    
-    user_request = st.text_area(
+    description = st.text_area(
         "Beschreibe deine gewünschte Automation",
-        placeholder="Beispiel: Ich möchte, dass das Licht im Flur automatisch angeht wenn Bewegung erkannt wird, aber nur zwischen 18:00 und 8:00 Uhr und nur wenn es dunkel ist.",
+        placeholder="z.B.: Schalte das Licht im Flur ein wenn Bewegung erkannt wird, aber nur nachts zwischen 22 und 6 Uhr",
         height=120
     )
     
-    output_type = st.selectbox(
-        "Gewünschtes Output-Format",
-        ["Home Assistant Automation (YAML)", "Node-RED Flow (JSON)", "Python Script", "Dashboard Card (YAML)"]
+    output_format = st.selectbox(
+        "Ausgabeformat",
+        ["Home Assistant YAML", "Node-RED JSON", "Python Script"]
     )
     
-    if st.button("🤖 Automation generieren", type="primary"):
-        if not user_request:
-            st.error("Bitte beschreibe zuerst deine gewünschte Automation!")
-        else:
+    if st.button("🪄 Automation erstellen", type="primary"):
+        if description:
             with st.spinner("Claude erstellt deine Automation..."):
-                # Build context
-                entity_list = [e.get('entity_id') for e in entities[:100]]
-                
-                prompt = f"""Erstelle eine Home Assistant Automation basierend auf dieser Anfrage:
+                prompt = f"""Erstelle eine Home Assistant Automation basierend auf dieser Beschreibung:
 
-ANFRAGE:
-{user_request}
-
-GEWÜNSCHTES FORMAT: {output_type}
+BESCHREIBUNG: {description}
 
 VERFÜGBARE ENTITÄTEN (Auswahl):
-{json.dumps(entity_list, indent=2)}
+{chr(10).join(entity_ids[:50])}
+
+AUSGABEFORMAT: {output_format}
 
 Antworte auf Deutsch mit:
 1. Kurze Erklärung was die Automation macht
-2. Der komplette Code im gewünschten Format
-3. Installationshinweise (wo einfügen, was beachten)
-
-Nutze wenn möglich die verfügbaren Entitäten. Falls spezifische Entitäten benötigt werden die nicht in der Liste sind, weise darauf hin.
+2. Den vollständigen Code
+3. Installationshinweise
 """
-                
-                result = call_claude(prompt, system_prompt="Du bist ein Home Assistant Automation-Experte. Erstelle sauberen, funktionierenden Code mit Best Practices.")
-                
-                st.markdown("---")
-                st.subheader("✅ Generierte Automation")
-                st.markdown(result)
-                
-                # Download
-                file_ext = "yaml" if "YAML" in output_type else "json" if "JSON" in output_type else "py"
-                st.download_button(
-                    label="💾 Code herunterladen",
-                    data=result,
-                    file_name=f"automation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{file_ext}",
-                    mime="text/plain"
-                )
+                result = ask_claude(prompt)
+            
+            st.markdown("### Deine Automation")
+            st.markdown(result)
+        else:
+            st.warning("Bitte beschreibe zuerst deine gewünschte Automation.")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================================
-# FOOTER
+# PAGE: SETTINGS
 # ============================================
-st.markdown("---")
-st.caption("Smart Home AI Center v0.2.0 | Powered by Claude AI & Home Assistant")
+elif page == "⚙️ Einstellungen":
+    st.title("Einstellungen")
+    st.markdown("Konfiguriere deine Verbindungen und API Keys")
+    
+    settings = st.session_state.settings
+    
+    # Home Assistant Section
+    st.markdown("""<div class="apple-card">""", unsafe_allow_html=True)
+    st.subheader("🏠 Home Assistant")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        ha_url = st.text_input(
+            "Home Assistant URL",
+            value=settings.get("ha_url", ""),
+            placeholder="http://192.168.1.100:8123"
+        )
+    with col2:
+        ha_token = st.text_input(
+            "Long-Lived Access Token",
+            value=settings.get("ha_token", ""),
+            type="password",
+            help="Erstelle unter: Profil → Sicherheit → Langlebige Zugangstoken"
+        )
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # AI Keys Section
+    st.markdown("""<div class="apple-card">""", unsafe_allow_html=True)
+    st.subheader("🤖 AI API Keys")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        google_key = st.text_input(
+            "Google AI Key (Gemini)",
+            value=settings.get("google_ai_key", ""),
+            type="password",
+            help="Kostenlos unter: aistudio.google.com/apikey"
+        )
+    with col2:
+        anthropic_key = st.text_input(
+            "Anthropic API Key (Claude)",
+            value=settings.get("anthropic_key", ""),
+            type="password",
+            help="Unter: console.anthropic.com"
+        )
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Save button
+    if st.button("💾 Einstellungen speichern", type="primary"):
+        new_settings = {
+            "ha_url": ha_url,
+            "ha_token": ha_token,
+            "google_ai_key": google_key,
+            "anthropic_key": anthropic_key,
+            "github_repo": settings.get("github_repo", ""),
+            "theme": settings.get("theme", "light")
+        }
+        save_settings(new_settings)
+        st.session_state.settings = new_settings
+        st.success("✅ Einstellungen gespeichert!")
+        st.rerun()
+    
+    st.markdown("---")
+    
+    # Updates Section
+    st.markdown("""<div class="apple-card">""", unsafe_allow_html=True)
+    st.subheader("🔄 Updates")
+    
+    git_status = get_git_status()
+    st.markdown(f"**Aktueller Stand:** {git_status}")
+    
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        if st.button("📥 Updates laden"):
+            with st.spinner("Lade Updates von GitHub..."):
+                success, output = git_pull_updates()
+            if success:
+                st.success("✅ Updates geladen! Starte die App neu um Änderungen zu aktivieren.")
+                st.code(output)
+            else:
+                st.error(f"❌ Update fehlgeschlagen: {output}")
+    
+    with col2:
+        st.markdown("*Updates vom GitHub Repository laden*")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Connection Test
+    st.markdown("---")
+    st.markdown("""<div class="apple-card">""", unsafe_allow_html=True)
+    st.subheader("🧪 Verbindungstest")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("Test Home Assistant"):
+            connected, msg = check_ha_connection()
+            if connected:
+                st.success(f"✅ {msg}")
+            else:
+                st.error(f"❌ {msg}")
+    
+    with col2:
+        if st.button("Test Gemini"):
+            result = ask_gemini("Sag nur 'OK' wenn du funktionierst.")
+            if "OK" in result or "ok" in result.lower():
+                st.success("✅ Gemini verbunden")
+            else:
+                st.error(f"❌ {result[:100]}")
+    
+    with col3:
+        if st.button("Test Claude"):
+            result = ask_claude("Sag nur 'OK' wenn du funktionierst.")
+            if "OK" in result or "ok" in result.lower():
+                st.success("✅ Claude verbunden")
+            else:
+                st.error(f"❌ {result[:100]}")
+    
+    st.markdown("</div>", unsafe_allow_html=True)

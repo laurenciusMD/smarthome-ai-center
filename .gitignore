@@ -7,6 +7,10 @@
 .env.local
 .env.*.local
 
+# Config folder (contains API keys!)
+config/
+config/settings.json
+
 # Python
 __pycache__/
 *.py[cod]
