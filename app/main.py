@@ -10,6 +10,7 @@ import requests
 import json
 from datetime import datetime, timedelta
 from anthropic import Anthropic
+import google.generativeai as genai
 import random
 
 # ============================================
@@ -123,6 +124,38 @@ def get_ha_token():
 
 def get_anthropic_key():
     return os.getenv("ANTHROPIC_API_KEY", "")
+
+def get_google_ai_key():
+    return os.getenv("GOOGLE_AI_KEY", "")
+
+def ask_gemini(prompt: str) -> str:
+    """Ask Gemini Flash for quick analysis (cheaper than Claude)."""
+    api_key = get_google_ai_key()
+    if not api_key:
+        return "❌ Google AI Key nicht konfiguriert (GOOGLE_AI_KEY in .env)"
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"❌ Gemini Fehler: {str(e)}"
+
+def ask_claude(prompt: str) -> str:
+    """Ask Claude for complex analysis (better quality)."""
+    api_key = get_anthropic_key()
+    if not api_key:
+        return "❌ Anthropic API Key nicht konfiguriert"
+    try:
+        client = Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4096,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.content[0].text
+    except Exception as e:
+        return f"❌ Claude Fehler: {str(e)}"
 
 def check_ha_connection():
     """Test Home Assistant connection."""
@@ -468,23 +501,25 @@ elif page == "🔍 Bug-Hunter":
                     st.markdown("**Details:**")
                     st.code('\n'.join(err['details'][:10]), language=None)
                 
-                # AI Analysis button
-                if st.button(f"🤖 Mit AI analysieren", key=f"analyze_{i}"):
-                    with st.spinner("Claude analysiert den Fehler..."):
-                        prompt = f"""Analysiere diesen Home Assistant Fehler und gib eine Lösung:
+                # AI Analysis button - using Gemini (cheaper & faster)
+                if st.button(f"🤖 Mit AI analysieren (Gemini)", key=f"analyze_{i}"):
+                    with st.spinner("Gemini analysiert den Fehler..."):
+                        prompt = f"""Du bist ein Home Assistant Experte. Analysiere diesen Fehler und gib eine Lösung:
 
 FEHLER:
 {err['message']}
 
 DETAILS:
-{chr(10).join(err['details'][:20])}
+{chr(10).join(err['details'][:20]) if err['details'] else 'Keine Details'}
 
 Antworte auf Deutsch mit:
 1. Was ist das Problem?
 2. Was ist die Ursache?
 3. Wie kann man es beheben? (mit konkretem YAML Code falls relevant)
+
+Halte dich kurz und präzise.
 """
-                        solution = call_claude(prompt)
+                        solution = ask_gemini(prompt)
                     
                     st.markdown("### 🤖 AI Analyse")
                     st.markdown(solution)
@@ -504,7 +539,20 @@ elif page == "📈 48h Analyst":
     st.title("📈 48h Analyst")
     st.markdown("Analysiere Sensor-Daten der letzten 48 Stunden auf Ineffizienzen")
     
-    st.warning("⚠️ Diese Analyse nutzt Claude AI und verbraucht API-Tokens. Nur bei Bedarf starten!")
+    # Model selection
+    col1, col2 = st.columns([2, 3])
+    with col1:
+        ai_model = st.selectbox(
+            "🤖 AI Modell wählen",
+            ["Gemini Flash (günstig)", "Claude (besser)"],
+            help="Gemini ist ~10x günstiger, Claude liefert tiefere Analysen"
+        )
+    
+    with col2:
+        if "Gemini" in ai_model:
+            st.info("💰 Gemini Flash: ~0.001€ pro Analyse")
+        else:
+            st.warning("💎 Claude: ~0.02€ pro Analyse (bessere Qualität)")
     
     st.markdown("---")
     
@@ -580,7 +628,11 @@ Gib mir MAXIMAL 20 konkrete Verbesserungsvorschläge auf Deutsch. Fokussiere auf
 Format: Nummerierte Liste mit kurzer Erklärung und konkreter Handlungsempfehlung.
 """
             
-            analysis = call_claude(prompt, system_prompt="Du bist ein Smart Home Effizienz-Experte. Analysiere präzise und gib konkrete, umsetzbare Empfehlungen.")
+            # Use selected AI model
+            if "Gemini" in ai_model:
+                analysis = ask_gemini(prompt)
+            else:
+                analysis = ask_claude(prompt)
             
             st.session_state.analysis_results = analysis
             st.session_state.last_analysis = datetime.now().strftime('%Y-%m-%d %H:%M')

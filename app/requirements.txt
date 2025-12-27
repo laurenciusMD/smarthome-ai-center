@@ -14,6 +14,9 @@ aiohttp>=3.9.0
 # Anthropic AI (Claude)
 anthropic>=0.18.0
 
+# Google AI (Gemini Flash - for cheap/fast analysis)
+google-generativeai>=0.3.0
+
 # Database
 influxdb-client>=1.40.0
 
