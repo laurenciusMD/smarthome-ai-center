@@ -1,7 +1,7 @@
 """
-Smart Home AI Center v0.4.0
+Smart Home AI Center v0.6.0
 ===========================
-Modern Dashboard Design
+Hypermodern UI Design with Glassmorphism
 """
 
 import streamlit as st
@@ -13,13 +13,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from anthropic import Anthropic
 import google.generativeai as genai
+from typing import List, Dict, Optional
 
 # ============================================
 # CONFIG & CONSTANTS
 # ============================================
-APP_VERSION = "0.4.0"
+APP_VERSION = "0.6.0"
 CONFIG_FILE = Path("/config/settings.json")
 CONFIG_DIR = Path("/config")
+HISTORY_FILE = Path("/config/heating_history.json")
 
 # ============================================
 # PAGE CONFIG
@@ -32,224 +34,398 @@ st.set_page_config(
 )
 
 # ============================================
-# MODERN DASHBOARD CSS
+# HYPERMODERN GLASSMORPHISM CSS
 # ============================================
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
-    
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css');
+
     * {
-        font-family: 'Poppins', sans-serif;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
-    
+
+    /* Main App Background - Modern Gradient */
     .stApp {
-        background: #f0f4f8;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #667eea 100%);
+        background-size: 400% 400%;
+        animation: gradientShift 15s ease infinite;
     }
-    
+
+    @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
-    
+
     .main .block-container {
         padding: 2rem;
         max-width: 1400px;
     }
-    
-    /* Dark Sidebar */
+
+    /* Glassmorphism Sidebar */
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1a2744 0%, #141d32 100%);
+        background: rgba(20, 29, 50, 0.85);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
     }
-    
+
     section[data-testid="stSidebar"] * {
-        color: #8896ab !important;
+        color: #cbd5e1 !important;
     }
-    
+
     section[data-testid="stSidebar"] .stRadio > div > label[data-checked="true"] {
-        color: #4dabf7 !important;
-        background: rgba(77, 171, 247, 0.1) !important;
-        border-radius: 8px;
+        color: #60a5fa !important;
+        background: linear-gradient(135deg, rgba(96, 165, 250, 0.2), rgba(59, 130, 246, 0.3)) !important;
+        border-radius: 12px;
+        border-left: 3px solid #60a5fa;
+        box-shadow: 0 4px 15px rgba(96, 165, 250, 0.2);
+        transform: translateX(4px);
+        transition: all 0.3s ease;
     }
     
-    /* Metric Cards */
+    /* Glassmorphism Metric Cards */
     .metric-card {
-        background: white;
-        border-radius: 16px;
-        padding: 24px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 20px;
+        padding: 28px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.3);
         display: flex;
         justify-content: space-between;
         align-items: center;
-        height: 140px;
+        height: 150px;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
     }
-    
+
+    .metric-card::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        transition: all 0.6s ease;
+        opacity: 0;
+    }
+
+    .metric-card:hover::before {
+        opacity: 1;
+        transform: translate(-25%, -25%);
+    }
+
+    .metric-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+    }
+
     .metric-info h2 {
-        font-size: 36px;
-        font-weight: 700;
-        color: #1a2744;
+        font-size: 42px;
+        font-weight: 800;
+        background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
         margin: 0;
         line-height: 1;
     }
-    
+
     .metric-info p {
         font-size: 14px;
-        color: #8896ab;
-        margin: 8px 0 0 0;
+        color: #64748b;
+        margin: 10px 0 0 0;
+        font-weight: 500;
     }
-    
+
     .metric-info .change {
         font-size: 13px;
-        font-weight: 600;
+        font-weight: 700;
         margin-top: 8px;
+        padding: 4px 12px;
+        border-radius: 20px;
+        display: inline-block;
+    }
+
+    .change.up {
+        background: rgba(34, 197, 94, 0.15);
+        color: #16a34a;
+    }
+    .change.down {
+        background: rgba(239, 68, 68, 0.15);
+        color: #dc2626;
+    }
+
+    .metric-icon {
+        width: 64px;
+        height: 64px;
+        border-radius: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        color: white;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .icon-yellow { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
+    .icon-cyan { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+    .icon-green { background: linear-gradient(135deg, #22c55e, #16a34a); }
+    .icon-purple { background: linear-gradient(135deg, #a855f7, #9333ea); }
+    .icon-red { background: linear-gradient(135deg, #ef4444, #dc2626); }
+    .icon-blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+    
+    /* Glassmorphism Content Cards */
+    .content-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 20px;
+        padding: 28px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        margin-bottom: 20px;
+        transition: all 0.3s ease;
+    }
+
+    .content-card:hover {
+        box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12);
+        transform: translateY(-2px);
+    }
+
+    .content-card h3 {
+        font-size: 18px;
+        font-weight: 700;
+        color: #1e293b;
+        margin: 0 0 20px 0;
+        letter-spacing: -0.3px;
+    }
+
+    /* Modern Status Badge */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 20px;
+        border-radius: 30px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+    }
+
+    .status-badge:hover {
+        transform: scale(1.05);
+    }
+
+    .status-online {
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: white;
+        box-shadow: 0 4px 20px rgba(34, 197, 94, 0.4);
+    }
+
+    .status-offline {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: white;
+        box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
     }
     
-    .change.up { color: #00c48c; }
-    .change.down { color: #ff6b6b; }
-    
-    .metric-icon {
-        width: 56px;
-        height: 56px;
+    /* Modern Logo */
+    .logo {
+        color: white !important;
+        font-size: 24px;
+        font-weight: 800;
+        padding: 20px 0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        letter-spacing: -0.5px;
+    }
+
+    /* Modern List Items */
+    .list-item {
+        display: flex;
+        align-items: center;
+        padding: 16px;
+        border-radius: 12px;
+        margin-bottom: 8px;
+        background: rgba(255, 255, 255, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        transition: all 0.3s ease;
+    }
+
+    .list-item:hover {
+        background: rgba(255, 255, 255, 0.8);
+        transform: translateX(4px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    .list-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .list-icon {
+        width: 48px;
+        height: 48px;
         border-radius: 14px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 24px;
-        color: white;
+        margin-right: 16px;
+        font-size: 20px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     }
-    
-    .icon-yellow { background: linear-gradient(135deg, #ffc107, #ffb300); }
-    .icon-cyan { background: linear-gradient(135deg, #00d4ff, #00bcd4); }
-    .icon-green { background: linear-gradient(135deg, #00c48c, #00a676); }
-    .icon-purple { background: linear-gradient(135deg, #7c4dff, #651fff); }
-    .icon-red { background: linear-gradient(135deg, #ff6b6b, #f44336); }
-    .icon-blue { background: linear-gradient(135deg, #4dabf7, #2196f3); }
-    
-    /* Content Cards */
-    .content-card {
-        background: white;
-        border-radius: 16px;
-        padding: 24px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        margin-bottom: 16px;
-    }
-    
-    .content-card h3 {
-        font-size: 16px;
-        font-weight: 600;
-        color: #1a2744;
-        margin: 0 0 16px 0;
-    }
-    
-    /* Status Badge */
-    .status-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 8px 16px;
-        border-radius: 24px;
-        font-size: 13px;
-        font-weight: 600;
-    }
-    
-    .status-online {
-        background: rgba(0, 196, 140, 0.12);
-        color: #00c48c;
-    }
-    
-    .status-offline {
-        background: rgba(255, 107, 107, 0.12);
-        color: #ff6b6b;
-    }
-    
-    /* Logo */
-    .logo {
-        color: white !important;
-        font-size: 22px;
-        font-weight: 700;
-        padding: 16px 0;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    
-    /* List items */
-    .list-item {
-        display: flex;
-        align-items: center;
-        padding: 12px 0;
-        border-bottom: 1px solid #f0f4f8;
-    }
-    
-    .list-item:last-child {
-        border-bottom: none;
-    }
-    
-    .list-icon {
-        width: 40px;
-        height: 40px;
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 12px;
-        font-size: 16px;
-    }
-    
+
     .list-content {
         flex: 1;
     }
-    
+
     .list-title {
-        font-size: 14px;
+        font-size: 15px;
+        font-weight: 600;
+        color: #1e293b;
+        margin: 0 0 4px 0;
+    }
+
+    .list-subtitle {
+        font-size: 13px;
+        color: #64748b;
+        margin: 0;
         font-weight: 500;
-        color: #1a2744;
+    }
+
+    /* Dismissible Error Card */
+    .error-card {
+        background: rgba(254, 242, 242, 0.95);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        border-radius: 16px;
+        padding: 16px 20px;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        transition: all 0.3s ease;
+        position: relative;
+    }
+
+    .error-card:hover {
+        box-shadow: 0 4px 16px rgba(239, 68, 68, 0.15);
+    }
+
+    .error-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        flex-shrink: 0;
+    }
+
+    .error-content {
+        flex: 1;
+        color: #991b1b;
+    }
+
+    .error-title {
+        font-size: 14px;
+        font-weight: 600;
+        margin: 0 0 4px 0;
+        color: #991b1b;
+    }
+
+    .error-detail {
+        font-size: 12px;
+        color: #b91c1c;
         margin: 0;
     }
-    
-    .list-subtitle {
-        font-size: 12px;
-        color: #8896ab;
-        margin: 2px 0 0 0;
+
+    .dismiss-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: rgba(239, 68, 68, 0.1);
+        color: #dc2626;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+    }
+
+    .dismiss-btn:hover {
+        background: rgba(239, 68, 68, 0.2);
+        transform: scale(1.1);
     }
     
-    /* Buttons */
+    /* Modern Gradient Buttons */
     .stButton > button {
-        background: linear-gradient(135deg, #ff6b6b, #f44336) !important;
+        background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
         color: white !important;
         border: none !important;
-        border-radius: 10px !important;
-        padding: 12px 24px !important;
-        font-weight: 600 !important;
+        border-radius: 14px !important;
+        padding: 14px 28px !important;
+        font-weight: 700 !important;
         font-size: 14px !important;
-        box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3) !important;
+        box-shadow: 0 8px 24px rgba(59, 130, 246, 0.35) !important;
+        transition: all 0.3s ease !important;
+        letter-spacing: 0.3px !important;
     }
-    
+
     .stButton > button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 16px rgba(244, 67, 54, 0.4) !important;
+        transform: translateY(-3px) !important;
+        box-shadow: 0 12px 32px rgba(59, 130, 246, 0.45) !important;
+        background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+    }
+
+    .stButton > button:active {
+        transform: translateY(-1px) !important;
     }
     
-    /* Input Fields */
+    /* Modern Input Fields */
     .stTextInput > div > div > input,
     .stTextArea > div > div > textarea {
-        border-radius: 10px !important;
-        border: 2px solid #e8ecf0 !important;
-        padding: 12px 16px !important;
+        border-radius: 14px !important;
+        border: 2px solid rgba(255, 255, 255, 0.4) !important;
+        padding: 14px 18px !important;
         font-size: 14px !important;
-        background: white !important;
-        color: #1a2744 !important;
+        background: rgba(255, 255, 255, 0.95) !important;
+        color: #1e293b !important;
+        font-weight: 500 !important;
+        transition: all 0.3s ease !important;
     }
-    
+
     .stTextInput > div > div > input:focus,
     .stTextArea > div > div > textarea:focus {
-        border-color: #4dabf7 !important;
-        box-shadow: 0 0 0 3px rgba(77, 171, 247, 0.1) !important;
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15) !important;
+        background: white !important;
     }
-    
+
     .stTextInput > label,
     .stTextArea > label,
     .stSelectbox > label {
-        color: #1a2744 !important;
-        font-weight: 500 !important;
+        color: #1e293b !important;
+        font-weight: 700 !important;
+        font-size: 14px !important;
+        margin-bottom: 8px !important;
     }
     
     /* Selectbox */
@@ -280,136 +456,184 @@ st.markdown("""
         color: #1a2744 !important;
     }
     
-    /* Markdown text */
-    .stMarkdown, .stMarkdown p, .stMarkdown li, .stMarkdown span {
-        color: #1a2744 !important;
+    /* Markdown Text - HIGH CONTRAST */
+    .stMarkdown, .stMarkdown p, .stMarkdown li, .stMarkdown span, .stMarkdown div {
+        color: #0f172a !important;
+        font-weight: 500 !important;
     }
-    
+
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+        color: #1e293b !important;
+        font-weight: 800 !important;
+    }
+
     .stMarkdown code {
-        background: #f0f4f8 !important;
-        color: #1a2744 !important;
-        padding: 2px 6px !important;
-        border-radius: 4px !important;
+        background: rgba(30, 41, 59, 0.08) !important;
+        color: #0f172a !important;
+        padding: 3px 8px !important;
+        border-radius: 6px !important;
+        font-weight: 600 !important;
+        font-size: 13px !important;
     }
-    
-    /* Code blocks - light background, dark text for readability */
+
+    /* Code Blocks - HIGH CONTRAST */
     .stMarkdown pre {
-        background: #f1f5f9 !important;
-        border-radius: 8px !important;
-        padding: 16px !important;
-        border: 1px solid #e2e8f0 !important;
+        background: #1e293b !important;
+        border-radius: 16px !important;
+        padding: 20px !important;
+        border: 1px solid rgba(148, 163, 184, 0.2) !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1) !important;
     }
-    
+
     .stMarkdown pre code {
         background: transparent !important;
-        color: #334155 !important;
+        color: #e2e8f0 !important;
         font-size: 14px !important;
+        font-weight: 500 !important;
+        line-height: 1.6 !important;
     }
-    
-    /* st.code blocks */
-    .stCodeBlock, 
+
+    /* st.code blocks - HIGH CONTRAST */
+    .stCodeBlock,
     [data-testid="stCodeBlock"] {
-        background: #f1f5f9 !important;
-        border-radius: 8px !important;
-        border: 1px solid #e2e8f0 !important;
+        background: #1e293b !important;
+        border-radius: 16px !important;
+        border: 1px solid rgba(148, 163, 184, 0.2) !important;
     }
-    
+
     .stCodeBlock code,
     [data-testid="stCodeBlock"] code,
     .stCodeBlock pre,
     [data-testid="stCodeBlock"] pre {
-        background: #f1f5f9 !important;
-        color: #334155 !important;
+        background: #1e293b !important;
+        color: #e2e8f0 !important;
+        font-weight: 500 !important;
     }
-    
+
     /* All code elements */
     pre, code {
-        color: #334155 !important;
+        color: #e2e8f0 !important;
     }
-    
+
     pre {
-        background: #f1f5f9 !important;
-        padding: 16px !important;
-        border-radius: 8px !important;
+        background: #1e293b !important;
+        padding: 20px !important;
+        border-radius: 16px !important;
         overflow-x: auto !important;
-        border: 1px solid #e2e8f0 !important;
+        border: 1px solid rgba(148, 163, 184, 0.2) !important;
     }
-    
+
     /* Inline code */
     p code, li code, span code {
-        background: #f1f5f9 !important;
-        color: #334155 !important;
-        padding: 2px 6px !important;
-        border-radius: 4px !important;
+        background: rgba(30, 41, 59, 0.08) !important;
+        color: #0f172a !important;
+        padding: 3px 8px !important;
+        border-radius: 6px !important;
+        font-weight: 600 !important;
     }
     
-    /* Alerts */
+    /* Modern Alerts with HIGH CONTRAST */
     .stSuccess > div {
-        background: rgba(0, 196, 140, 0.1) !important;
-        color: #00a676 !important;
-        border-radius: 10px !important;
-        border: none !important;
+        background: rgba(34, 197, 94, 0.15) !important;
+        color: #15803d !important;
+        border-radius: 14px !important;
+        border: 1px solid rgba(34, 197, 94, 0.3) !important;
+        padding: 16px 20px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 4px 12px rgba(34, 197, 94, 0.1) !important;
     }
-    
+
+    .stSuccess > div p {
+        color: #15803d !important;
+        font-weight: 600 !important;
+    }
+
     .stError > div {
-        background: rgba(255, 107, 107, 0.1) !important;
-        color: #d32f2f !important;
-        border-radius: 10px !important;
-        border: none !important;
+        background: rgba(239, 68, 68, 0.15) !important;
+        color: #991b1b !important;
+        border-radius: 14px !important;
+        border: 1px solid rgba(239, 68, 68, 0.3) !important;
+        padding: 16px 20px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1) !important;
     }
-    
+
+    .stError > div p {
+        color: #991b1b !important;
+        font-weight: 600 !important;
+    }
+
     .stWarning > div {
-        background: rgba(255, 193, 7, 0.1) !important;
-        color: #f57c00 !important;
-        border-radius: 10px !important;
-        border: none !important;
+        background: rgba(245, 158, 11, 0.15) !important;
+        color: #92400e !important;
+        border-radius: 14px !important;
+        border: 1px solid rgba(245, 158, 11, 0.3) !important;
+        padding: 16px 20px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.1) !important;
     }
-    
+
     .stWarning > div p, .stWarning > div span {
-        color: #f57c00 !important;
+        color: #92400e !important;
+        font-weight: 600 !important;
     }
-    
+
     .stInfo > div {
-        background: rgba(77, 171, 247, 0.1) !important;
-        color: #1976d2 !important;
-        border-radius: 10px !important;
-        border: none !important;
+        background: rgba(59, 130, 246, 0.15) !important;
+        color: #1e40af !important;
+        border-radius: 14px !important;
+        border: 1px solid rgba(59, 130, 246, 0.3) !important;
+        padding: 16px 20px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1) !important;
+    }
+
+    .stInfo > div p {
+        color: #1e40af !important;
+        font-weight: 600 !important;
     }
     
-    /* Tabs */
+    /* Modern Tabs */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
+        gap: 12px;
         background: transparent;
     }
-    
+
     .stTabs [data-baseweb="tab"] {
-        background: white !important;
-        border-radius: 10px !important;
-        color: #1a2744 !important;
-        padding: 10px 20px !important;
-        border: 1px solid #e8ecf0 !important;
+        background: rgba(255, 255, 255, 0.7) !important;
+        border-radius: 14px !important;
+        color: #1e293b !important;
+        padding: 12px 24px !important;
+        border: 2px solid rgba(255, 255, 255, 0.3) !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
     }
-    
+
     .stTabs [data-baseweb="tab"]:hover {
-        background: #f0f4f8 !important;
+        background: rgba(255, 255, 255, 0.9) !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
     }
-    
+
     .stTabs [aria-selected="true"] {
-        background: #4dabf7 !important;
+        background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
         color: white !important;
-        border-color: #4dabf7 !important;
+        border-color: transparent !important;
+        box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4) !important;
+        transform: translateY(-2px) !important;
     }
-    
+
     .stTabs [data-baseweb="tab-panel"] {
-        padding-top: 16px;
+        padding-top: 24px;
     }
-    
-    /* Tab content text */
+
+    /* Tab content text - HIGH CONTRAST */
     .stTabs [data-baseweb="tab-panel"] p,
     .stTabs [data-baseweb="tab-panel"] span,
     .stTabs [data-baseweb="tab-panel"] div,
     .stTabs [data-baseweb="tab-panel"] label {
-        color: #1a2744 !important;
+        color: #0f172a !important;
+        font-weight: 500 !important;
     }
     
     /* Divider */
@@ -456,6 +680,9 @@ def load_settings():
         "ha_token": "",
         "anthropic_key": "",
         "google_ai_key": "",
+        "influx_url": "",
+        "influx_token": "",
+        "influx_org": "",
         "github_repo": "https://github.com/laurenciusMD/smarthome-ai-center.git",
         "theme": "light"
     }
@@ -490,8 +717,12 @@ if 'ha_cache' not in st.session_state:
     st.session_state.ha_cache = None
 if 'error_logs' not in st.session_state:
     st.session_state.error_logs = []
+if 'dismissed_errors' not in st.session_state:
+    st.session_state.dismissed_errors = set()
 if 'analysis_results' not in st.session_state:
     st.session_state.analysis_results = None
+if 'heating_history' not in st.session_state:
+    st.session_state.heating_history = []
 
 # ============================================
 # API FUNCTIONS
@@ -540,13 +771,21 @@ def get_ha_errors():
         if state == 'unavailable':
             eid = entity.get('entity_id', '')
             name = entity.get('attributes', {}).get('friendly_name', eid)
-            errors.append({
-                'level': 'error',
-                'message': f"Entity nicht verfügbar: {name}",
-                'entity_id': eid,
-                'details': []
-            })
+            error_id = f"{eid}_{state}"
+            # Skip dismissed errors
+            if error_id not in st.session_state.dismissed_errors:
+                errors.append({
+                    'id': error_id,
+                    'level': 'error',
+                    'message': f"Entity nicht verfügbar: {name}",
+                    'entity_id': eid,
+                    'details': []
+                })
     return errors
+
+def dismiss_error(error_id: str):
+    """Dismiss an error so it won't be shown again."""
+    st.session_state.dismissed_errors.add(error_id)
 
 def ask_gemini(prompt: str) -> str:
     """Ask Gemini Flash for quick analysis."""
@@ -703,8 +942,8 @@ def get_climate_entities():
     states = get_ha_states()
     climate_entities = []
     keywords = [
-        'climate.', 'sensor.temp', 'sensor.hum', 'valve', 'thermostat', 
-        'heating', 'heiz', 'ems-esp', 'ems_esp', 'boiler', 'dhw', 
+        'climate.', 'sensor.temp', 'sensor.hum', 'valve', 'thermostat',
+        'heating', 'heiz', 'ems-esp', 'ems_esp', 'boiler', 'dhw',
         'vorlauf', 'rücklauf', 'flow', 'radiator', 'hc1', 'hc2'
     ]
     for entity in states:
@@ -713,6 +952,95 @@ def get_climate_entities():
         if any(x in eid or x in fname for x in keywords):
             climate_entities.append(entity)
     return climate_entities
+
+def save_heating_history(analysis_data: Dict):
+    """Save heating analysis to history file."""
+    try:
+        history = []
+        if HISTORY_FILE.exists():
+            with open(HISTORY_FILE, 'r') as f:
+                history = json.load(f)
+
+        # Add timestamp
+        analysis_data['timestamp'] = datetime.now().isoformat()
+        history.append(analysis_data)
+
+        # Keep only last 100 entries
+        history = history[-100:]
+
+        # Save to file
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        with open(HISTORY_FILE, 'w') as f:
+            json.dump(history, f, indent=2)
+
+        return True
+    except Exception as e:
+        st.error(f"Fehler beim Speichern der Historie: {e}")
+        return False
+
+def load_heating_history() -> List[Dict]:
+    """Load heating analysis history."""
+    try:
+        if HISTORY_FILE.exists():
+            with open(HISTORY_FILE, 'r') as f:
+                return json.load(f)
+        return []
+    except:
+        return []
+
+def get_influxdb_data(query: str, bucket: str = "homeassistant") -> Optional[List]:
+    """Query InfluxDB for historical data from Home Assistant."""
+    try:
+        influx_url = get_setting("influx_url", "")
+        influx_token = get_setting("influx_token", "")
+        influx_org = get_setting("influx_org", "")
+
+        if not all([influx_url, influx_token, influx_org]):
+            return None
+
+        from influxdb_client import InfluxDBClient
+
+        client = InfluxDBClient(
+            url=influx_url,
+            token=influx_token,
+            org=influx_org,
+            timeout=30000
+        )
+
+        query_api = client.query_api()
+        result = query_api.query(query)
+
+        data = []
+        for table in result:
+            for record in table.records:
+                data.append({
+                    'time': record.get_time(),
+                    'value': record.get_value(),
+                    'field': record.get_field(),
+                    'measurement': record.get_measurement(),
+                })
+
+        client.close()
+        return data
+    except ImportError:
+        st.warning("⚠️ influxdb-client nicht installiert. Führe aus: pip install influxdb-client")
+        return None
+    except Exception as e:
+        st.error(f"InfluxDB Fehler: {e}")
+        return None
+
+def get_heating_history_from_influx(entity_id: str, hours: int = 24) -> Optional[List]:
+    """Get heating entity history from InfluxDB."""
+    # Build Flux query
+    query = f'''
+    from(bucket: "homeassistant")
+        |> range(start: -{hours}h)
+        |> filter(fn: (r) => r["entity_id"] == "{entity_id}")
+        |> filter(fn: (r) => r["_field"] == "value")
+        |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)
+    '''
+
+    return get_influxdb_data(query)
 
 def call_ha_service(domain: str, service: str, data: dict):
     """Call a Home Assistant service."""
@@ -954,41 +1282,66 @@ if page == "🏠 Dashboard":
         st.rerun()
 
 # ============================================
-# PAGE: BUG-HUNTER
+# PAGE: BUG-HUNTER (with dismissible errors)
 # ============================================
 elif page == "🔍 Bug-Hunter":
     st.markdown("## Bug-Hunter")
-    st.markdown("Finde und behebe Probleme mit KI-Unterstützung")
-    
-    if st.button("🔄 Probleme laden"):
-        st.session_state.error_logs = get_ha_errors()
-        st.rerun()
-    
+    st.markdown("Finde und behebe Probleme mit KI-Unterstützung - wegklickbare Fehler!")
+
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        if st.button("🔄 Neu laden"):
+            st.session_state.error_logs = get_ha_errors()
+            st.rerun()
+    with col2:
+        if st.button("🗑️ Alle zurücksetzen"):
+            st.session_state.dismissed_errors = set()
+            st.session_state.error_logs = get_ha_errors()
+            st.rerun()
+
     errors = st.session_state.error_logs
-    
-    st.markdown(f"""<div class="content-card"><h3>🐛 {len(errors)} Probleme gefunden</h3>""", unsafe_allow_html=True)
-    
+    if not errors:
+        errors = get_ha_errors()
+        st.session_state.error_logs = errors
+
+    st.markdown(f"""<div class="content-card"><h3>🐛 {len(errors)} Aktive Probleme</h3>""", unsafe_allow_html=True)
+
     if not errors:
         st.success("🎉 Keine Probleme! Dein System läuft einwandfrei.")
     else:
         st.markdown("</div>", unsafe_allow_html=True)
-        
-        for i, err in enumerate(errors[:15]):
-            with st.expander(f"🔴 {err['message'][:60]}..."):
-                st.code(err.get('entity_id', 'N/A'))
-                
-                if st.button(f"🤖 Analysieren", key=f"analyze_{i}"):
-                    with st.spinner("Gemini analysiert..."):
-                        prompt = f"""Home Assistant Problem:
+
+        # Display errors with dismiss buttons
+        for i, err in enumerate(errors[:20]):
+            error_id = err.get('id', f"error_{i}")
+            col_err, col_dismiss = st.columns([20, 1])
+
+            with col_err:
+                with st.expander(f"🔴 {err['message'][:70]}...", expanded=False):
+                    st.code(err.get('entity_id', 'N/A'))
+
+                    if st.button(f"🤖 Mit KI analysieren", key=f"analyze_{i}"):
+                        with st.spinner("Gemini analysiert..."):
+                            prompt = f"""Home Assistant Problem:
 {err['message']}
 Entity: {err.get('entity_id', 'N/A')}
 
 Antworte auf Deutsch:
 1. Mögliche Ursache
-2. Lösung"""
-                        solution = ask_gemini(prompt)
-                    st.markdown(solution)
-    
+2. Lösung
+3. Konkrete Schritte zur Behebung"""
+                            solution = ask_gemini(prompt)
+                        st.markdown(solution)
+
+            with col_dismiss:
+                if st.button("✕", key=f"dismiss_{i}", help="Fehler wegklicken"):
+                    dismiss_error(error_id)
+                    st.session_state.error_logs = get_ha_errors()
+                    st.rerun()
+
+        if len(errors) >= 20:
+            st.info(f"📋 Es gibt weitere Fehler. Behebe die oberen, damit neue nachrutschen können.")
+
     if errors:
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1130,13 +1483,24 @@ elif page == "🌡️ Heizung":
     tab1, tab2, tab3 = st.tabs(["📊 Übersicht", "💬 KI-Assistent", "📋 Logs"])
     
     with tab1:
-        st.markdown("### Heizungs-Entitäten")
-        
+        st.markdown("### Heizungs-Übersicht & Historie")
+
+        # Load history
+        history = load_heating_history()
+        if history:
+            st.markdown(f"""<div class="content-card">
+                <h3>📜 Letzte Analysen ({len(history)})</h3>
+            </div>""", unsafe_allow_html=True)
+
+            for idx, entry in enumerate(reversed(history[-5:])):
+                with st.expander(f"📅 {entry.get('timestamp', 'N/A')[:16]} - {entry.get('type', 'Analyse')}", expanded=False):
+                    st.json(entry)
+
         climate_entities = get_climate_entities()
         automations = get_ha_automations()
         heating_keywords = ['heiz', 'heating', 'temperatur', 'klima', 'thermostat', 'ems', 'vorlauf', 'boiler', 'schimmel']
         heating_automations = [a for a in automations if any(x in a['name'].lower() for x in heating_keywords)]
-        
+
         col1, col2 = st.columns(2)
         
         with col1:
@@ -1258,7 +1622,7 @@ elif page == "🌡️ Heizung":
         
         if send_button and user_input:
             # Build full prompt with context
-            full_prompt = f"""Du bist ein Experte für Home Assistant Heizungssteuerung. 
+            full_prompt = f"""Du bist ein Experte für Home Assistant Heizungssteuerung.
 Der Benutzer hat ein Problem mit seiner Heizung. Analysiere die bereitgestellten Daten und hilf bei der Lösung.
 
 {st.session_state.heating_context}
@@ -1287,32 +1651,82 @@ Der Benutzer kann diese Dienstaufrufe dann direkt aus der Oberfläche ausführen
 
             # Add user message to history
             st.session_state.heating_chat_history.append({'role': 'user', 'content': user_input})
-            
+
             with st.spinner("Claude analysiert..."):
                 response = ask_claude(full_prompt)
-            
+
             # Add response to history
             st.session_state.heating_chat_history.append({'role': 'assistant', 'content': response})
-            
+
+            # Save to heating history
+            save_heating_history({
+                'type': 'chat_analysis',
+                'question': user_input,
+                'response': response,
+                'context_size': len(st.session_state.heating_context)
+            })
+
             st.rerun()
     
     with tab3:
-        st.markdown("### 📋 Heizungs-Logs")
-        
+        st.markdown("### 📋 Heizungs-Logs & InfluxDB Historie")
+
+        # InfluxDB Section
+        st.markdown("""<div class="content-card"><h3>📊 InfluxDB Historische Daten</h3></div>""", unsafe_allow_html=True)
+
+        influx_configured = all([
+            get_setting("influx_url", ""),
+            get_setting("influx_token", ""),
+            get_setting("influx_org", "")
+        ])
+
+        if influx_configured:
+            climate_entities = get_climate_entities()
+            if climate_entities:
+                entity_options = [e.get('entity_id', '') for e in climate_entities[:20]]
+                selected_entity = st.selectbox("Entität auswählen", entity_options)
+                hours_back = st.slider("Zeitraum (Stunden)", 1, 168, 24)
+
+                if st.button("📈 Daten von InfluxDB abrufen"):
+                    with st.spinner("Lade Daten von InfluxDB..."):
+                        data = get_heating_history_from_influx(selected_entity, hours_back)
+
+                    if data:
+                        st.success(f"✅ {len(data)} Datenpunkte geladen!")
+
+                        # Simple visualization
+                        import pandas as pd
+                        df = pd.DataFrame(data)
+                        if not df.empty and 'time' in df.columns and 'value' in df.columns:
+                            df['time'] = pd.to_datetime(df['time'])
+                            st.line_chart(df.set_index('time')['value'])
+                            st.dataframe(df.tail(20))
+                        else:
+                            st.json(data[:10])
+                    else:
+                        st.warning("⚠️ Keine Daten gefunden oder InfluxDB nicht erreichbar.")
+        else:
+            st.info("💡 Konfiguriere InfluxDB in den Einstellungen, um historische Daten zu analysieren.")
+
+        st.markdown("---")
+
+        # Logbook section
+        st.markdown("### 📋 Home Assistant Logbook")
+
         log_hours = st.selectbox("Zeitraum", [6, 12, 24, 48, 72], index=2)
-        
+
         if st.button("🔄 Logs laden"):
             logs = get_ha_logbook(hours=log_hours)
             log_keywords = ['climate', 'heiz', 'heating', 'temperatur', 'valve', 'thermostat', 'ems', 'boiler', 'vorlauf', 'dhw']
             heating_logs = [l for l in logs if any(x in str(l).lower() for x in log_keywords)]
-            
+
             st.markdown(f"**{len(heating_logs)} Heizungs/EMS-ESP Ereignisse gefunden**")
-            
+
             for log in heating_logs[:50]:
                 name = log.get('name', 'Unknown')
                 message = log.get('message', log.get('state', ''))
                 when = log.get('when', '')
-                
+
                 st.markdown(f"""
                 <div class="list-item">
                     <div class="list-content">
@@ -1425,13 +1839,28 @@ elif page == "⚙️ Einstellungen":
     
     # AI Keys
     st.markdown("""<div class="content-card"><h3>🤖 AI API Keys</h3>""", unsafe_allow_html=True)
-    
+
     col1, col2 = st.columns(2)
     with col1:
         google_key = st.text_input("Google AI (Gemini)", value=settings.get("google_ai_key", ""), type="password")
     with col2:
         anthropic_key = st.text_input("Anthropic (Claude)", value=settings.get("anthropic_key", ""), type="password")
-    
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # InfluxDB Configuration
+    st.markdown("""<div class="content-card"><h3>📊 InfluxDB (für historische Daten)</h3>""", unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        influx_url = st.text_input("InfluxDB URL", value=settings.get("influx_url", ""), placeholder="http://192.168.1.100:8086")
+    with col2:
+        influx_org = st.text_input("Organisation", value=settings.get("influx_org", ""), placeholder="homeassistant")
+    with col3:
+        influx_token = st.text_input("Token", value=settings.get("influx_token", ""), type="password")
+
+    st.info("💡 Mit InfluxDB können historische Daten aus Home Assistant für tiefere Heizungsanalysen abgerufen werden.")
+
     st.markdown("</div>", unsafe_allow_html=True)
     
     # GitHub
@@ -1462,6 +1891,9 @@ elif page == "⚙️ Einstellungen":
             "ha_token": ha_token,
             "google_ai_key": google_key,
             "anthropic_key": anthropic_key,
+            "influx_url": influx_url,
+            "influx_token": influx_token,
+            "influx_org": influx_org,
             "github_repo": github_repo,
             "theme": "light"
         }
