@@ -2,8 +2,10 @@
 
 AI-powered maintenance system for Home Assistant with a clean Apple-inspired design.
 
-![Version](https://img.shields.io/badge/version-0.3.0-blue)
+![Version](https://img.shields.io/badge/version-0.5.2-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
+![Docker Pulls](https://img.shields.io/docker/pulls/laurencius/smarthome-ai-center)
+![Docker Image Size](https://img.shields.io/docker/image-size/laurencius/smarthome-ai-center)
 
 ## ✨ Features
 
@@ -16,16 +18,39 @@ AI-powered maintenance system for Home Assistant with a clean Apple-inspired des
 
 ## 🚀 Quick Start
 
-### 1. Clone the repository
+### Option 1: Using Docker Hub (Recommended)
 
 ```bash
-git clone https://github.com/laurenciusMD/smarthome-ai-center.git
-cd smarthome-ai-center
+# Create docker-compose.yml
+wget https://raw.githubusercontent.com/laurenciusMD/smarthome-ai-center/main/docker-compose.yml
+
+# Or create manually with:
+version: '3.8'
+services:
+  app:
+    image: laurencius/smarthome-ai-center:latest
+    container_name: smarthome-ai-center
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - TZ=Europe/Berlin
+    volumes:
+      - ./config:/config
+      - ./data/exports:/app/exports
+
+# Start the container
+docker compose up -d
 ```
 
-### 2. Start the containers
+### Option 2: Build from Source
 
 ```bash
+# Clone the repository
+git clone https://github.com/laurenciusMD/smarthome-ai-center.git
+cd smarthome-ai-center
+
+# Start the containers
 docker compose up -d --build
 ```
 
@@ -64,6 +89,24 @@ ANTHROPIC_API_KEY=sk-ant-...
 - **AI**: Google Gemini Flash + Anthropic Claude
 - **Database**: InfluxDB v2
 - **Container**: Docker Compose
+
+## 🐳 Docker Hub
+
+Pre-built images are available on Docker Hub:
+
+```bash
+docker pull laurencius/smarthome-ai-center:latest
+```
+
+**Available Tags:**
+- `latest` - Latest stable version from main branch
+- `v0.5.2` - Specific version tags
+- `0.5` - Minor version tags
+- `0` - Major version tags
+
+**Supported Platforms:**
+- `linux/amd64` - x86_64 systems (Intel/AMD)
+- `linux/arm64` - ARM64 systems (Raspberry Pi 4/5, Apple Silicon)
 
 ## 🔄 Updates
 
