@@ -54,11 +54,49 @@ cd smarthome-ai-center
 docker compose up -d --build
 ```
 
-### 3. Open the app
+### Option 3: CasaOS Installation
+
+**Method 1: Using Docker Run Command (Recommended)**
+
+In CasaOS, go to "Custom Install" and use:
+
+```bash
+docker run -d \
+  --name smarthome-ai-center \
+  --restart unless-stopped \
+  -p 8501:8501 \
+  -v ~/smarthome-config:/config \
+  -v ~/smarthome-exports:/app/exports \
+  -e TZ=Europe/Berlin \
+  laurencius/smarthome-ai-center:latest
+```
+
+**Method 2: Using Docker Compose in CasaOS**
+
+If importing the docker-compose.yml file, ensure port mapping is correct:
+- Check that port 8501 is properly exposed
+- Verify with: `docker ps | grep smarthome` should show `0.0.0.0:8501->8501/tcp`
+
+**Troubleshooting:**
+If you can't access the app after installation, the port might not be mapped correctly. Fix with:
+
+```bash
+# Stop and remove the container
+docker stop <container-name>
+docker rm <container-name>
+
+# Recreate with proper port mapping (see Method 1 above)
+```
+
+---
+
+## Next Steps
+
+### 1. Open the app
 
 Navigate to `http://YOUR_SERVER_IP:8501`
 
-### 4. Configure in the UI
+### 2. Configure in the UI
 
 Go to **⚙️ Einstellungen** and enter:
 - Your Home Assistant URL and Token
